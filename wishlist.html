@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>ほしいものリスト</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDPHM7A0d7kk9TBU7nlkiGl7Z08SH8klzg",
+  authDomain: "wishlist-app-298e9.firebaseapp.com",
+  projectId: "wishlist-app-298e9",
+  storageBucket: "wishlist-app-298e9.firebasestorage.app",
+  messagingSenderId: "273719207004",
+  appId: "1:273719207004:web:7ae859f5a15e2a58b1b299"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// Firestore保存
+async function saveToFirestore(uid, items, categories) {
+  try {
+    await setDoc(doc(db, 'users', uid), { items: JSON.stringify(items), categories: JSON.stringify(categories), updatedAt: new Date().toISOString() });
+  } catch(e) { console.error('Firestore save error:', e); }
+}
+
+// Firestoreから読み込み
+async function loadFromFirestore(uid) {
+  try {
+    const snap = await getDoc(doc(db, 'users', uid));
+    if (snap.exists()) return snap.data();
+  } catch(e) { console.error('Firestore load error:', e); }
+  return null;
+}
+
+// グローバルに公開
+window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile };
+</script>
+<style>
+  :root {
+    --bg: #f5f5f5;
+    --surface: #ffffff;
+    --surface2: #f0f0f0;
+    --border: #e0e0e0;
+    --accent: #e8380d;
+    --text: #111;
+    --text2: #666;
+    --text3: #aaa;
+    --danger: #e8380d;
+    --success: #00a651;
+    --radius: 12px;
+    --tab-h: 60px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    padding-bottom: 220px;
+  }
+
+  /* Header */
+  .header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(255,255,255,0.96);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    min-height: 48px;
+  }
+  .header-title { font-size: 18px; font-weight: 700; line-height: 1; }
+  .header-title span { color: var(--accent); }
+  .header-stats { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text2); }
+
+  /* Tab bar */
+  .tab-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: var(--tab-h);
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex; z-index: 200;
+  }
+  .tab-item {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 3px; cursor: pointer;
+    border: none; background: none;
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    font-size: 10px; color: var(--text3);
+    transition: all 0.2s;
+    padding: 6px 0;
+    position: relative;
+  }
+  .tab-item.active {
+    color: var(--accent);
+  }
+  .tab-item.active::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 20%; right: 20%;
+    height: 3px;
+    background: var(--accent);
+    border-radius: 0 0 3px 3px;
+  }
+  .tab-item.active .tab-item-icon {
+    transform: scale(1.2);
+  }
+  .tab-item-icon {
+    font-size: 22px;
+    transition: transform 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tab-item .tab-label {
+    font-size: 10px;
+    font-weight: 400;
+    transition: font-weight 0.2s;
+  }
+  .tab-item.active .tab-label {
+    font-weight: 700;
+  }
+
+  /* FAB */
+  .fab {
+    position: fixed;
+    bottom: calc(60px + 52px + 18px);
+    right: 20px;
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 28px;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(232,56,13,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 150;
+  }
+
+  /* Total bar - just above tab bar */
+  .total-bar {
+    position: fixed;
+    bottom: 60px;
+    left: 0;
+    right: 0;
+    background: rgba(255,255,255,0.98);
+    border-top: 1px solid var(--border);
+    padding: 0 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 140;
+    height: 52px;
+  }
+  .total-label { font-size: 13px; color: var(--text2); }
+  .total-amount { font-family: 'DM Mono', monospace; font-size: 20px; font-weight: 500; color: var(--accent); }
+
+  /* Screens */
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* List */
+  .list { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; padding-bottom: 220px; }
+
+  /* Card */
+  .card-wrap { position: relative; overflow: hidden; border-radius: var(--radius); display: block; isolation: isolate; }
+  .card-delete-bg {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    width: 52px; height: 52px;
+    background: var(--danger);
+    border-radius: 50%;
+    display: none;
+    align-items: center; justify-content: center;
+    cursor: pointer; user-select: none;
+    z-index: 2;
+  }
+  .card-delete-bg svg { pointer-events: none; }
+  .card.swiped ~ .card-delete-bg,
+  .card-wrap:has(.card.swiped) .card-delete-bg { display: flex; }
+  .card {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+    transition: transform 0.2s ease; touch-action: pan-y;
+    position: relative; z-index: 1;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    animation: fadeIn 0.25s ease;
+  }
+  .card.swiped { transform: translateX(-90px); }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+  .card-inner { display: flex; align-items: flex-start; min-height: 90px; width: 100%; }
+  .card-thumb {
+    width: 90px;
+    min-width: 90px;
+    max-width: 90px;
+    height: 90px;
+    min-height: 90px;
+    border-radius: var(--radius) 0 0 var(--radius);
+    flex-shrink: 0;
+    flex-grow: 0;
+    background-color: var(--surface2);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    overflow: hidden;
+  }
+  .card-body {
+    flex: 1; min-width: 0; padding: 8px 10px;
+    display: flex; flex-direction: row; justify-content: space-between; align-items: stretch;
+    min-height: 90px;
+  }
+  .card-left {
+    flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; justify-content: center;
+  }
+  .card-right-col {
+    display: flex; flex-direction: column; align-items: flex-end;
+    justify-content: space-between; padding-left: 8px; flex-shrink: 0;
+  }
+  .card-name { font-size: 14px; font-weight: 500; line-height: 1.4; color: #111; word-break: break-all; }
+  .card-category { font-size: 11px; color: var(--text2); margin-top: 3px; }
+  .card-price { font-size: 14px; color: var(--accent); font-weight: 700; white-space: nowrap; }
+  .card-memo { font-size: 11px; color: var(--text2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-bottom-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: auto; padding-top: 6px;
+  }
+  .card-actions {
+    display: flex; align-items: center; gap: 6px; flex-direction: column;
+    justify-content: center; padding: 8px 8px 8px 0; flex-shrink: 0;
+  }
+  .btn-check {
+    width: 30px; height: 30px; border-radius: 50%;
+    border: 2px solid var(--border); background: transparent;
+    color: var(--text2); font-size: 14px; cursor: pointer;
+    transition: all 0.2s; display: flex; align-items: center; justify-content: center;
+  }
+  .btn-check.checked { background: var(--success); border-color: var(--success); color: #fff; }
+
+  .card-select { display: none; }
+  .card-check-overlay {
+    display: none;
+    position: absolute;
+    left: 0; top: 0;
+    width: 90px; height: 100%;
+    z-index: 4;
+    border-radius: var(--radius) 0 0 var(--radius);
+    align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  .card-check-overlay .check-circle {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 2.5px solid #fff;
+    background: rgba(255,255,255,0.3);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  }
+  .card-check-overlay .check-circle svg { display: none; }
+  .card-wrap.edit-mode .card-check-overlay { display: flex; }
+  .card-wrap.selected .card { border-color: #e8380d; background: #fff8f7; }
+  .card-wrap.selected .card-check-overlay { background: rgba(232,56,13,0.25); }
+  .card-wrap.selected .check-circle { background: #e8380d; border-color: #e8380d; }
+  .card-wrap.selected .check-circle svg { display: block; }
+
+  /* Empty */
+  .empty { text-align: center; padding: 60px 20px; color: var(--text3); }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; }
+
+  /* Filter drawer */
+  .drawer {
+    display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 260px;
+    background: #fff; z-index: 400;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+    overflow-y: auto;
+  }
+  .drawer.open { display: block; }
+  .overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.3); z-index: 399;
+  }
+  .overlay.open { display: block; }
+  .drawer-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: #fff;
+  }
+
+  /* ===== ADD/EDIT MODAL (full screen) ===== */
+  .fullscreen-modal {
+    display: none; position: fixed; inset: 0;
+    background: var(--bg); z-index: 600;
+    overflow-y: auto;
+    animation: slideInUp 0.3s ease;
+    padding-bottom: 100px;
+  }
+  .fullscreen-modal.open { display: block; }
+  @keyframes slideInUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+  .fs-header {
+    display: flex; align-items: center;
+    padding: 14px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .fs-close {
+    background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text2);
+    width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+  }
+  .fs-title { font-size: 16px; font-weight: 700; position: absolute; left: 50%; transform: translateX(-50%); }
+  .fs-save {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 20px; padding: 7px 18px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+  }
+  .fs-save-fixed {
+    position: fixed;
+    bottom: 28px;
+    right: 20px;
+    width: 64px;
+    height: 64px;
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 50%;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    box-shadow: 0 4px 16px rgba(232,56,13,0.4);
+    z-index: 700;
+    display: none;
+    align-items: center; justify-content: center;
+  }
+
+
+  /* Image area */
+  .fs-image-area {
+    background: #e0e0e0;
+    margin: 12px;
+    border-radius: var(--radius);
+    height: 180px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden; cursor: pointer;
+    border: 1px solid #ccc;
+  }
+  .fs-image-area input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .fs-image-placeholder { text-align: center; color: var(--text3); pointer-events: none; }
+  .fs-image-placeholder-icon { font-size: 36px; margin-bottom: 6px; }
+  .fs-image-placeholder-text { font-size: 13px; }
+  .fs-preview-img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; border-radius: var(--radius); display: none;
+  }
+  .fs-preview-img.show { display: block; }
+
+  /* Form sections */
+  .fs-section {
+    background: var(--surface);
+    border-radius: var(--radius);
+    margin: 0 12px 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .fs-row {
+    display: flex; align-items: center;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    gap: 10px;
+    overflow: visible;
+  }
+  .fs-row:last-child { border-bottom: none; }
+  .fs-row-icon { font-size: 18px; width: 24px; text-align: center; color: var(--text3); flex-shrink: 0; }
+  .fs-row-input {
+    flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    font-size: 15px; color: var(--text);
+  }
+  .fs-row-input::placeholder { color: var(--text3); }
+  .fs-row-input textarea {
+    width: 100%; border: none; outline: none; background: transparent;
+    font-family: 'Zen Kaku Gothic New', sans-serif; font-size: 15px; color: var(--text);
+    resize: none; line-height: 1.4;
+  }
+  .fs-paste-btn {
+    background: #e8e8e8; border: none; cursor: pointer;
+    padding: 6px 12px; border-radius: 6px;
+    font-size: 13px; color: #333;
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    white-space: nowrap; flex-shrink: 0;
+    font-weight: 500;
+  }
+  .fs-open-url-btn {
+    font-size: 13px; color: #007aff; background: none; border: none;
+    cursor: pointer; font-family: 'Zen Kaku Gothic New', sans-serif;
+    padding: 2px 0; text-decoration: underline;
+  }
+
+  /* Category accordion */
+  .fs-cat-header {
+    display: flex; align-items: center; padding: 14px;
+    cursor: pointer; gap: 12px; border-bottom: 1px solid var(--border);
+  }
+  .fs-cat-header.no-border { border-bottom: none; }
+  .fs-cat-arrow { margin-left: auto; font-size: 13px; color: var(--text3); transition: transform 0.2s; }
+  .fs-cat-arrow.open { transform: rotate(90deg); }
+  .fs-cat-body { display: none; border-top: 1px solid var(--border); }
+  .fs-cat-body.open { display: block; }
+  .fs-cat-option {
+    display: flex; align-items: center; padding: 12px 14px 12px 50px;
+    border-bottom: 1px solid var(--border); cursor: pointer; font-size: 14px; gap: 8px;
+  }
+  .fs-cat-option:last-child { border-bottom: none; }
+  .fs-cat-option.selected { color: var(--accent); font-weight: 700; }
+  .fs-cat-option .check { margin-left: auto; color: var(--accent); }
+
+  /* Settings / その他 */
+  .settings-section { background: #fff; border-radius: var(--radius); margin: 8px 14px; overflow: hidden; border: 1px solid var(--border); box-sizing: border-box; }
+  .settings-title { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; padding: 10px 14px 6px; }
+  .settings-row {
+    display: flex; align-items: center; padding: 13px 14px;
+    border-top: 1px solid var(--border); cursor: pointer; font-size: 15px; gap: 10px;
+  }
+  .settings-row-icon { font-size: 18px; width: 26px; text-align: center; }
+  .settings-row-label { flex: 1; }
+  .settings-row-arrow { color: var(--text3); font-size: 13px; }
+
+  /* Category management */
+  .cat-manage-item {
+    display: flex; align-items: center; padding: 11px 14px;
+    border-top: 1px solid var(--border); gap: 10px; font-size: 14px;
+    background: #fff; cursor: default;
+  }
+  .cat-manage-item:first-of-type { border-top: none; }
+  .cat-drag-handle { color: var(--text3); font-size: 18px; cursor: grab; touch-action: none; padding: 0 4px; user-select: none; }
+  .cat-label { flex: 1; }
+  /* swipe delete for cat */
+  .cat-wrap { position: relative; overflow: hidden; }
+  .cat-delete-bg {
+    position: absolute; right: 0; top: 0; bottom: 0; width: 72px;
+    background: var(--danger); display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: #fff; font-weight: 700; cursor: pointer;
+  }
+  .cat-manage-item { transition: transform 0.2s ease; touch-action: pan-y; position: relative; z-index: 1; }
+  .cat-manage-item.swiped { transform: translateX(-72px); }
+
+  .add-cat-row {
+    display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border);
+  }
+  .add-cat-input {
+    flex: 1; min-width: 0; background: #fafafa; border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; font-family: 'Zen Kaku Gothic New', sans-serif;
+    font-size: 14px; outline: none;
+  }
+  .add-cat-btn {
+    background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    padding: 8px 14px; font-size: 14px; cursor: pointer;
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    white-space: nowrap; flex-shrink: 0; min-width: 60px;
+  }
+
+  /* Filter icon SVG */
+  .filter-icon-btn {
+    background: none; border: none; cursor: pointer; padding: 4px;
+    display: flex; align-items: center; color: var(--text2);
+  }
+  .filter-icon-btn.active { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">ほしい<span>もの</span></div>
+  <div style="display:flex;align-items:center;gap:6px;min-width:0;">
+    <div class="header-stats" id="statsText" style="white-space:nowrap;">0件</div>
+    <div style="display:flex;align-items:center;gap:4px;width:90px;justify-content:flex-end;flex-shrink:0;">
+      <button class="filter-icon-btn" id="filterBtn" title="絞り込み" style="visibility:hidden;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+        </svg>
+      </button>
+      <button class="filter-icon-btn" id="filterBtn2" title="絞り込み" style="visibility:hidden;display:flex;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+        </svg>
+      </button>
+      <button id="listEditBtn" style="background:none;border:none;cursor:pointer;font-size:13px;color:#666;font-family:'Zen Kaku Gothic New',sans-serif;padding:2px 4px;white-space:nowrap;visibility:hidden;">編集</button>
+      <button id="boughtEditBtn" style="background:none;border:none;cursor:pointer;font-size:13px;color:#666;font-family:'Zen Kaku Gothic New',sans-serif;padding:2px 4px;white-space:nowrap;visibility:hidden;">編集</button>
+    </div>
+  </div>
+</div>
+<div id="bulkBar" style="display:none;position:sticky;top:48px;z-index:99;background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 14px;align-items:center;justify-content:space-between;">
+  <span id="bulkCount" style="font-size:13px;color:#666;">0件選択</span>
+  <button id="bulkDeleteBtn" style="background:#e8380d;color:#fff;border:none;border-radius:8px;padding:6px 16px;font-size:13px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">削除</button>
+</div>
+
+<!-- Filter Drawer -->
+<div class="drawer" id="filterDrawer">
+  <div class="drawer-header">
+    <div style="font-weight:700;font-size:16px">カテゴリーで絞り込み</div>
+    <button id="filterClose" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text2)">✕</button>
+  </div>
+  <div id="filterCatList" style="padding:8px 0"></div>
+</div>
+<div class="overlay" id="filterOverlay"></div>
+
+<!-- 欲しいもの画面 -->
+<div class="screen active" id="screen-wish">
+  <div class="list" id="list"></div>
+</div>
+
+<!-- Bought bulk bar -->
+<div id="boughtBulkBar" style="display:none;position:sticky;top:48px;z-index:99;background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 14px;align-items:center;justify-content:space-between;">
+  <span id="boughtBulkCount" style="font-size:13px;color:#666;">0件選択</span>
+  <button id="boughtBulkDeleteBtn" style="background:#e8380d;color:#fff;border:none;border-radius:8px;padding:6px 16px;font-size:13px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">削除</button>
+</div>
+<!-- 買ったもの画面 -->
+<div class="screen" id="screen-bought">
+  <div class="list" id="boughtList"></div>
+</div>
+
+<!-- その他画面 -->
+<div class="screen" id="screen-other" style="overflow-y:auto; height:calc(100vh - 60px - 52px - 60px); box-sizing:border-box;">
+  <div style="padding-top:8px; padding-bottom:80px; max-width:100%;">
+    <!-- アカウント欄 -->
+    <div class="settings-section" id="accountSection">
+      <div class="settings-title">アカウント</div>
+      <div class="settings-row" id="accountRow" style="cursor:pointer;">
+        <span class="settings-row-icon">👤</span>
+        <div style="flex:1;">
+          <div id="accountName" style="font-size:15px;font-weight:500;">ログインしていません</div>
+          <div id="accountEmail" style="font-size:12px;color:var(--text2);margin-top:2px;"></div>
+        </div>
+        <span class="settings-row-arrow">›</span>
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-title">データ</div>
+      <div class="settings-row" id="exportBtn">
+        <span class="settings-row-icon">📤</span>
+        <span class="settings-row-label">エクスポート（バックアップ）</span>
+        <span class="settings-row-arrow">›</span>
+      </div>
+      <div class="settings-row" id="importBtn">
+        <span class="settings-row-icon">📥</span>
+        <span class="settings-row-label">インポート（復元）</span>
+        <span class="settings-row-arrow">›</span>
+      </div>
+      <input type="file" id="importFile" accept=".json" style="display:none">
+    </div>
+    <div class="settings-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 6px;box-sizing:border-box;">
+        <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);text-transform:uppercase;letter-spacing:1px;">カテゴリー管理</div>
+        <button id="catEditBtn" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:13px;padding:2px 6px;border-radius:6px;font-family:'Zen Kaku Gothic New',sans-serif;">✏️ 編集</button>
+      </div>
+      <div id="catList"></div>
+      <div class="add-cat-row" id="addCatRow" style="display:none;">
+        <input class="add-cat-input" id="newCatInput" placeholder="例: 📱 ガジェット" />
+        <button class="add-cat-btn" id="addCatBtn">追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tab bar -->
+<div class="tab-bar">
+  <button class="tab-item active" data-screen="wish">
+    <span class="tab-item-icon">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+    </span>
+    <span class="tab-label">欲しいもの</span>
+  </button>
+  <button class="tab-item" data-screen="bought">
+    <span class="tab-item-icon">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </span>
+    <span class="tab-label">買ったもの</span>
+  </button>
+  <button class="tab-item" data-screen="other">
+    <span class="tab-item-icon">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </span>
+    <span class="tab-label">その他</span>
+  </button>
+</div>
+
+<!-- FAB (center) -->
+<button class="fab" id="fabBtn">＋</button>
+
+<!-- Total bar above FAB -->
+<div class="total-bar">
+  <div class="total-label">合計金額</div>
+  <div class="total-amount" id="totalAmount">¥0</div>
+</div>
+
+<!-- Full screen Add/Edit Modal -->
+<div class="fullscreen-modal" id="fsModal">
+  <div class="fs-header" style="position:relative;">
+    <button class="fs-close" id="fsClose">✕</button>
+    <div class="fs-title" id="fsTitle">追加</div>
+    <div style="width:60px"></div>
+  </div>
+  <!-- Image area -->
+  <div class="fs-image-area" id="fsImageArea">
+    <input type="file" id="inputImage" accept="image/*" />
+    <div class="fs-image-placeholder" id="fsImgPlaceholder">
+      <div class="fs-image-placeholder-icon">📷</div>
+      <div class="fs-image-placeholder-text">商品の画像を選択する</div>
+    </div>
+    <img class="fs-preview-img" id="fsPreviewImg" />
+  </div>
+
+  <!-- URL + Name + Memo -->
+  <div class="fs-section">
+    <div class="fs-row">
+      <span class="fs-row-icon">🔗</span>
+      <input class="fs-row-input" id="inputUrl" placeholder="URL" type="url" />
+      <button class="fs-paste-btn" id="pasteUrlBtn">貼付</button>
+    </div>
+    <div class="fs-row" id="openUrlRow" style="display:none">
+      <span class="fs-row-icon"></span>
+      <button class="fs-open-url-btn" id="openUrlBtn">商品サイトを開く</button>
+    </div>
+    <div class="fs-row">
+      <span class="fs-row-icon">✏️</span>
+      <textarea class="fs-row-input" id="inputName" placeholder="商品名" rows="2"></textarea>
+    </div>
+    <div class="fs-row" style="border-bottom:none">
+      <span class="fs-row-icon">📝</span>
+      <input class="fs-row-input" id="inputMemo" placeholder="説明" />
+    </div>
+  </div>
+
+  <!-- Price -->
+  <div class="fs-section">
+    <div class="fs-row" style="border-bottom:none">
+      <span class="fs-row-icon">¥</span>
+      <input class="fs-row-input" id="inputPrice" placeholder="金額" type="number" />
+    </div>
+  </div>
+
+  <!-- Category accordion -->
+  <div class="fs-section" id="fsCatSection">
+    <div class="fs-cat-header no-border" id="fsCatHeader">
+      <span style="font-size:18px;color:var(--text3)">🗂️</span>
+      <span style="font-size:15px;margin-left:12px">カテゴリー</span>
+      <span style="margin-left:auto;font-size:14px;color:var(--text2)" id="fsCatSelected">なし</span>
+      <span class="fs-cat-arrow" id="fsCatArrow">›</span>
+    </div>
+    <div class="fs-cat-body" id="fsCatBody"></div>
+  </div>
+</div>
+
+<!-- Auth Modal -->
+<div id="authModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:800;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;padding:24px 20px;width:90%;max-width:360px;max-height:90vh;overflow-y:auto;">
+    <div id="authViewLogin">
+      <div style="font-size:18px;font-weight:700;margin-bottom:20px;text-align:center;">ログイン</div>
+      <input id="authEmail" type="email" placeholder="メールアドレス" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
+      <input id="authPassword" type="password" placeholder="パスワード" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;margin-bottom:16px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
+      <div id="authError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
+      <button id="loginBtn" style="width:100%;padding:13px;background:#e8380d;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">ログイン</button>
+      <button id="toRegisterBtn" style="width:100%;padding:13px;background:#f5f5f5;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">新規登録</button>
+      <button id="authCloseBtn" style="width:100%;padding:10px;background:none;color:#aaa;border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">キャンセル</button>
+    </div>
+    <div id="authViewRegister" style="display:none;">
+      <div style="font-size:18px;font-weight:700;margin-bottom:20px;text-align:center;">新規登録</div>
+      <input id="regName" type="text" placeholder="ユーザー名" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
+      <input id="regEmail" type="email" placeholder="メールアドレス" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
+      <input id="regPassword" type="password" placeholder="パスワード（6文字以上）" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;margin-bottom:16px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
+      <div id="regError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
+      <button id="registerBtn" style="width:100%;padding:13px;background:#e8380d;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">登録する</button>
+      <button id="toLoginBtn" style="width:100%;padding:13px;background:#f5f5f5;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">ログインに戻る</button>
+      <button id="regCloseBtn" style="width:100%;padding:10px;background:none;color:#aaa;border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">キャンセル</button>
+    </div>
+    <div id="authViewAccount" style="display:none;">
+      <div style="font-size:18px;font-weight:700;margin-bottom:20px;text-align:center;">アカウント</div>
+      <div style="text-align:center;margin-bottom:20px;">
+        <div style="font-size:40px;margin-bottom:8px;">👤</div>
+        <div id="acctName" style="font-size:16px;font-weight:700;"></div>
+        <div id="acctEmail" style="font-size:13px;color:#666;margin-top:4px;"></div>
+      </div>
+      <div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:16px;">
+        <div style="padding:14px;border-bottom:1px solid #e0e0e0;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">新しいパスワード</div>
+          <input id="newPassword" type="password" placeholder="6文字以上" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
+        </div>
+        <button id="changePasswordBtn" style="width:100%;padding:12px;background:none;border:none;font-size:14px;color:#e8380d;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;font-weight:700;">パスワードを変更する</button>
+      </div>
+      <div id="pwError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
+      <div id="pwSuccess" style="color:#00a651;font-size:13px;margin-bottom:10px;display:none;">パスワードを変更しました</div>
+      <button id="logoutBtn" style="width:100%;padding:13px;background:#f5f5f5;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">ログアウト</button>
+      <button id="acctCloseBtn" style="width:100%;padding:10px;background:none;color:#aaa;border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">閉じる</button>
+    </div>
+  </div>
+</div>
+<button class="fs-save-fixed" id="fsSave">保存</button>
+
+<script>
+const STORAGE_KEY = 'wishlist_v2';
+const CAT_KEY = 'wishlist_cats_v2';
+
+let items = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+let categories = JSON.parse(localStorage.getItem(CAT_KEY) || JSON.stringify([
+  {name:'📱 ガジェット'},
+  {name:'👕 ファッション'},
+  {name:'🍜 食べ物'},
+  {name:'📚 本・マンガ'},
+  {name:'🎮 ゲーム'},
+  {name:'💊 美容・健康'},
+  {name:'🏠 ホーム・インテリア'},
+  {name:'📦 その他'},
+]));
+
+let currentTab = 'wish';
+let editingId = null;
+let selectedImageData = '';
+let selectedCategory = null; // null = なし
+let catOpen = false;
+let selectedCategories = new Set();
+
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); }
+function saveCats() { localStorage.setItem(CAT_KEY, JSON.stringify(categories)); }
+function getEmoji(name) { return name ? name.slice(0,2) : '📦'; }
+
+// ===== Tab =====
+document.querySelectorAll('.tab-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentTab = btn.dataset.screen;
+    document.querySelectorAll('.tab-item').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + currentTab).classList.add('active');
+    const isWish = currentTab === 'wish';
+    document.getElementById('fabBtn').style.display = isWish ? 'flex' : 'none';
+    document.getElementById('totalAmount').parentElement.style.display = isWish ? 'flex' : 'none';
+    const isBought = currentTab === 'bought';
+    document.getElementById('filterBtn').style.visibility = isWish ? 'visible' : 'hidden';
+    document.getElementById('filterBtn2').style.visibility = isBought ? 'visible' : 'hidden';
+    document.getElementById('listEditBtn').style.visibility = isWish ? 'visible' : 'hidden';
+    document.getElementById('boughtEditBtn').style.visibility = isBought ? 'visible' : 'hidden';
+    if (!isWish && listEditMode) setListEditMode(false);
+    if (!isBought && boughtEditMode) setBoughtEditMode(false);
+    if (currentTab === 'bought') renderBought();
+    else if (currentTab === 'other') { renderOther(); document.getElementById('statsText').textContent = ''; }
+    else render();
+  });
+});
+
+// ===== Render wish =====
+function render() {
+  const list = document.getElementById('list');
+  let filtered = items.filter(i => !i.bought);
+  if (selectedCategories.size > 0) filtered = filtered.filter(i => selectedCategories.has(i.category));
+  list.innerHTML = filtered.length === 0
+    ? `<div class="empty"><div class="empty-icon"><svg width="56" height="56" viewBox="0 0 24 24" fill="#ddd" stroke="#ccc" stroke-width="1.5"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div><div>まだ何もありません</div></div>`
+    : filtered.map(item => cardHTML(item)).join('');
+  if (filtered.length > 0) {
+    setupCardEvents(list);
+    if (typeof listEditMode !== 'undefined' && listEditMode) {
+      list.querySelectorAll('.card-wrap').forEach(wrap => {
+        wrap.classList.add('edit-mode');
+        if (selectedIds.has(wrap.dataset.id)) wrap.classList.add('selected');
+      });
+      list.querySelectorAll('.card-wrap').forEach(wrap => {
+        if (selectedIds.has(wrap.dataset.id)) wrap.classList.add('selected');
+      });
+    }
+  }
+  const total = items.filter(i=>!i.bought).reduce((s,i)=>s+(i.price||0),0);
+  document.getElementById('totalAmount').textContent = '¥' + total.toLocaleString();
+  document.getElementById('statsText').textContent = `${items.filter(i=>!i.bought).length}件`;
+  document.getElementById('filterBtn').classList.toggle('active', selectedCategories.size > 0);
+}
+
+function renderBought() {
+  const list = document.getElementById('boughtList');
+  let filtered = items.filter(i => i.bought);
+  if (boughtSelectedCategories.size > 0) filtered = filtered.filter(i => boughtSelectedCategories.has(i.category));
+  list.innerHTML = filtered.length === 0
+    ? `<div class="empty"><div class="empty-icon"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div>まだ何もありません</div></div>`
+    : filtered.map(item => cardHTML(item)).join('');
+  if (filtered.length > 0) {
+    setupCardEvents(list);
+    if (boughtEditMode) {
+      list.querySelectorAll('.card-wrap').forEach(wrap => {
+        wrap.classList.add('edit-mode');
+        if (boughtSelectedIds.has(wrap.dataset.id)) wrap.classList.add('selected');
+      });
+      list.querySelectorAll('.card-wrap').forEach(wrap => {
+        if (boughtSelectedIds.has(wrap.dataset.id)) wrap.classList.add('selected');
+      });
+    }
+  }
+  document.getElementById('filterBtn2').classList.toggle('active', boughtSelectedCategories.size > 0);
+  if (currentTab === 'bought') {
+    document.getElementById('statsText').textContent = `${items.filter(i=>i.bought).length}件`;
+  }
+}
+
+function cardHTML(item) {
+  const thumb = item.image
+    ? `<div class="card-thumb" style="background-image:url('${item.image}');"></div>`
+    : `<div class="card-thumb">${getEmoji(item.category)}</div>`;
+  return `
+    <div class="card-wrap">
+      <div class="card-delete-bg" data-id="${item.id}">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+        </svg>
+      </div>
+      <div class="card" data-id="${item.id}">
+        <div class="card-inner">
+          ${thumb}
+          <div class="card-body">
+            <div class="card-left">
+              <div class="card-name">${item.name||'（名前なし）'}</div>
+              ${item.memo ? `<div class="card-memo">${item.memo}</div>` : ''}
+              ${item.category ? `<div class="card-category">${item.category}</div>` : ''}
+            </div>
+            <div class="card-right-col">
+              <div class="card-price">${item.price ? '¥'+item.price.toLocaleString() : ''}</div>
+              <button class="btn-check ${item.bought?'checked':''}" data-id="${item.id}">✓</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function setupCardEvents(container) {
+  container.querySelectorAll('.btn-check').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); toggleBought(btn.dataset.id); });
+  });
+  container.querySelectorAll('.card').forEach(card => {
+    let startX = 0;
+    card.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, {passive:true});
+    card.addEventListener('touchmove', e => {
+      const dx = e.touches[0].clientX - startX;
+      if (dx < -10) card.style.transform = `translateX(${Math.max(dx,-80)}px)`;
+      else if (dx > 0 && card.classList.contains('swiped')) card.style.transform = 'translateX(0)';
+    }, {passive:true});
+    card.addEventListener('touchend', e => {
+      const dx = e.changedTouches[0].clientX - startX;
+      if (dx < -45) { card.classList.add('swiped'); card.style.transform = ''; }
+      else { card.classList.remove('swiped'); card.style.transform = ''; }
+    });
+    card.addEventListener('click', e => {
+      if (e.target.classList.contains('btn-check')) return;
+      if (card.classList.contains('swiped')) { card.classList.remove('swiped'); return; }
+      const item = items.find(i=>i.id===card.dataset.id);
+      if (item) openFsModal(item);
+    });
+  });
+  container.querySelectorAll('.card-delete-bg').forEach(btn => {
+    btn.addEventListener('click', () => deleteItem(btn.dataset.id));
+  });
+}
+
+function toggleBought(id) {
+  const item = items.find(i=>i.id===id);
+  if (item) { item.bought = !item.bought; save(); render(); renderBought(); }
+}
+function deleteItem(id) {
+  items = items.filter(i=>i.id!==id);
+  save(); render(); renderBought();
+}
+
+// ===== Filter drawer =====
+document.getElementById('filterBtn').addEventListener('click', () => {
+  const cats = [...new Set(items.filter(i=>!i.bought).map(i=>i.category).filter(Boolean))];
+  const list = document.getElementById('filterCatList');
+  list.innerHTML = cats.length === 0
+    ? '<div style="padding:14px;color:#aaa;font-size:13px">カテゴリーなし</div>'
+    : cats.map(c => `
+      <label style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:14px">
+        <input type="checkbox" data-cat="${c}" ${selectedCategories.has(c)?'checked':''}
+          style="width:18px;height:18px;accent-color:#e8380d;cursor:pointer">
+        <span>${getEmoji(c)} ${c}</span>
+        <span style="margin-left:auto;color:#aaa;font-size:12px">${items.filter(i=>i.category===c&&!i.bought).length}件</span>
+      </label>`).join('');
+  list.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) selectedCategories.add(cb.dataset.cat);
+      else selectedCategories.delete(cb.dataset.cat);
+      render();
+    });
+  });
+  document.getElementById('filterDrawer').classList.add('open');
+  document.getElementById('filterOverlay').classList.add('open');
+});
+document.getElementById('filterClose').addEventListener('click', closeDrawer);
+document.getElementById('filterOverlay').addEventListener('click', closeDrawer);
+function closeDrawer() {
+  document.getElementById('filterDrawer').classList.remove('open');
+  document.getElementById('filterOverlay').classList.remove('open');
+}
+
+// ===== Full screen modal =====
+function openFsModal(item = null) {
+  editingId = item ? item.id : null;
+  document.getElementById('fsTitle').textContent = item ? '編集' : '追加';
+
+  // Reset
+  document.getElementById('inputUrl').value = (item && item.url) || '';
+  document.getElementById('inputName').value = (item && item.name) || '';
+  document.getElementById('inputMemo').value = (item && item.memo) || '';
+  document.getElementById('inputPrice').value = (item && item.price) || '';
+  selectedCategory = (item && item.category) || null;
+  selectedImageData = (item && item.image) || '';
+
+  updateUrlRow();
+  updateCatDisplay();
+  updateImagePreview();
+
+  catOpen = false;
+  document.getElementById('fsCatBody').classList.remove('open');
+  document.getElementById('fsCatArrow').classList.remove('open');
+  document.getElementById('fsCatHeader').classList.add('no-border');
+
+  document.getElementById('fsModal').classList.add('open');
+  document.getElementById('fsSave').style.display = 'flex';
+}
+
+function updateUrlRow() {
+  const url = document.getElementById('inputUrl').value.trim();
+  const row = document.getElementById('openUrlRow');
+  row.style.display = url ? 'flex' : 'none';
+}
+
+function updateCatDisplay() {
+  document.getElementById('fsCatSelected').textContent = selectedCategory || 'なし';
+  renderCatOptions();
+}
+
+function updateImagePreview() {
+  const img = document.getElementById('fsPreviewImg');
+  const ph = document.getElementById('fsImgPlaceholder');
+  if (selectedImageData) {
+    img.src = selectedImageData; img.classList.add('show'); ph.style.display = 'none';
+  } else {
+    img.classList.remove('show'); ph.style.display = 'block';
+  }
+}
+
+function renderCatOptions() {
+  const body = document.getElementById('fsCatBody');
+  const opts = [{name:null, emoji:'', label:'なし'}, ...categories.map(c=>({...c,label:c.name}))];
+  body.innerHTML = opts.map(c => `
+    <div class="fs-cat-option ${selectedCategory === c.name ? 'selected' : ''}" data-cat="${c.name||''}">
+      <span>${c.label}</span>
+      ${selectedCategory === c.name ? '<span class="check">✓</span>' : ''}
+    </div>`).join('');
+  body.querySelectorAll('.fs-cat-option').forEach(el => {
+    el.addEventListener('click', () => {
+      selectedCategory = el.dataset.cat || null;
+      updateCatDisplay();
+    });
+  });
+}
+
+// Category accordion toggle
+document.getElementById('fsCatHeader').addEventListener('click', () => {
+  catOpen = !catOpen;
+  document.getElementById('fsCatBody').classList.toggle('open', catOpen);
+  document.getElementById('fsCatArrow').classList.toggle('open', catOpen);
+  document.getElementById('fsCatHeader').classList.toggle('no-border', !catOpen);
+});
+
+// URL input
+document.getElementById('inputUrl').addEventListener('input', updateUrlRow);
+document.getElementById('pasteUrlBtn').addEventListener('click', async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    document.getElementById('inputUrl').value = text;
+    updateUrlRow();
+  } catch { alert('クリップボードへのアクセスが許可されていません'); }
+});
+document.getElementById('openUrlBtn').addEventListener('click', () => {
+  const url = document.getElementById('inputUrl').value.trim();
+  if (url) window.open(url, '_blank');
+});
+
+// Image
+document.getElementById('inputImage').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => { selectedImageData = ev.target.result; updateImagePreview(); };
+  reader.readAsDataURL(file);
+});
+document.getElementById('fsPreviewImg').addEventListener('click', () => {
+  document.getElementById('inputImage').click();
+});
+
+// Close
+document.getElementById('fsClose').addEventListener('click', () => {
+  document.getElementById('fsModal').classList.remove('open');
+  document.getElementById('fsSave').style.display = 'none';
+});
+
+// Save
+document.getElementById('fsSave').addEventListener('click', () => {
+  const name = document.getElementById('inputName').value.trim();
+  const price = parseInt(document.getElementById('inputPrice').value) || 0;
+  const memo = document.getElementById('inputMemo').value.trim();
+  const url = document.getElementById('inputUrl').value.trim();
+  if (editingId) {
+    const idx = items.findIndex(i=>i.id===editingId);
+    if (idx !== -1) items[idx] = {...items[idx], name, price, memo, url, category: selectedCategory, image: selectedImageData};
+  } else {
+    items.unshift({ id: Date.now().toString(), name, price, memo, url, category: selectedCategory, image: selectedImageData, bought: false, createdAt: new Date().toISOString() });
+  }
+  save(); render(); renderBought();
+  document.getElementById('fsModal').classList.remove('open');
+  document.getElementById('fsSave').style.display = 'none';
+});
+
+document.getElementById('fabBtn').addEventListener('click', () => openFsModal());
+
+// ===== その他 =====
+function renderOther() { renderCatManage(); }
+
+function renderCatManage() {
+  const list = document.getElementById('catList');
+  list.innerHTML = categories.map((c, idx) => `
+    <div class="cat-wrap" data-idx="${idx}">
+      ${catEditMode ? `<div class="cat-delete-bg" data-idx="${idx}">削除</div>` : ''}
+      <div class="cat-manage-item" data-idx="${idx}">
+        ${catEditMode ? `<span class="cat-drag-handle" data-idx="${idx}" style="cursor:grab;color:var(--text3);font-size:18px;padding:0 8px;touch-action:none;">☰</span>` : ''}
+        ${catEditMode
+          ? `<input class="cat-name-input" data-idx="${idx}" value="${c.name}" style="flex:1;border:none;border-bottom:1px solid var(--border);outline:none;font-size:14px;font-family:'Zen Kaku Gothic New',sans-serif;background:transparent;padding:2px 4px;" />`
+          : `<span class="cat-label" style="padding-left:14px;">${c.name}</span>`
+        }
+      </div>
+    </div>`).join('');
+
+  if (catEditMode) {
+    // 名前編集
+    list.querySelectorAll('.cat-name-input').forEach(input => {
+      input.addEventListener('blur', () => {
+        const idx = parseInt(input.dataset.idx);
+        const val = input.value.trim();
+        if (!val) return;
+        const oldName = categories[idx].name;
+        if (oldName === val) return;
+        categories[idx].name = val;
+        items.forEach(item => { if (item.category === oldName) item.category = val; });
+        save(); saveCats();
+      });
+    });
+
+    // スワイプ削除
+    list.querySelectorAll('.cat-manage-item').forEach(item => {
+      let startX = 0;
+      item.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, {passive:true});
+      item.addEventListener('touchmove', e => {
+        const dx = e.touches[0].clientX - startX;
+        if (dx < -10) item.style.transform = `translateX(${Math.max(dx,-72)}px)`;
+        else if (dx > 0 && item.classList.contains('swiped')) item.style.transform = 'translateX(0)';
+      }, {passive:true});
+      item.addEventListener('touchend', e => {
+        const dx = e.changedTouches[0].clientX - startX;
+        if (dx < -36) { item.classList.add('swiped'); item.style.transform = ''; }
+        else { item.classList.remove('swiped'); item.style.transform = ''; }
+      });
+    });
+
+    list.querySelectorAll('.cat-delete-bg').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        const name = categories[idx].name;
+        if (items.find(i=>i.category===name)) { alert(`「${name}」は使用中のため削除できません`); return; }
+        categories.splice(idx, 1); saveCats(); renderCatManage();
+      });
+    });
+
+    // 長押しドラッグ並び替え
+    list.querySelectorAll('.cat-drag-handle').forEach(handle => {
+      handle.addEventListener('touchstart', e => {
+        e.preventDefault();
+        longPressTimer = setTimeout(() => {
+          isDragging = true;
+          dragIdx = parseInt(handle.dataset.idx);
+          dragEl = handle.closest('.cat-wrap');
+          dragEl.style.opacity = '0.6';
+          dragEl.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+          if (navigator.vibrate) navigator.vibrate(40);
+        }, 400);
+      }, {passive:false});
+      handle.addEventListener('touchend', () => { clearTimeout(longPressTimer); });
+      handle.addEventListener('touchmove', () => { if (!isDragging) clearTimeout(longPressTimer); }, {passive:true});
+    });
+  }
+
+
+
+  // 長押しドラッグ並び替え
+  let dragIdx = null, dragEl = null, longPressTimer = null, isDragging = false;
+
+  list.querySelectorAll('.cat-drag-handle').forEach(handle => {
+    handle.addEventListener('touchstart', e => {
+      const idx = parseInt(handle.dataset.idx);
+      longPressTimer = setTimeout(() => {
+        isDragging = true;
+        dragIdx = idx;
+        dragEl = handle.closest('.cat-wrap');
+        dragEl.style.opacity = '0.6';
+        dragEl.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+        // バイブレーション（対応端末のみ）
+        if (navigator.vibrate) navigator.vibrate(40);
+      }, 400);
+    }, {passive:true});
+
+    handle.addEventListener('touchend', () => {
+      clearTimeout(longPressTimer);
+    });
+    handle.addEventListener('touchmove', () => {
+      if (!isDragging) clearTimeout(longPressTimer);
+    }, {passive:true});
+  });
+
+  document.addEventListener('touchmove', e => {
+    if (!isDragging || dragEl === null) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const wraps = [...list.querySelectorAll('.cat-wrap')];
+    wraps.forEach((el, i) => {
+      if (el === dragEl) return;
+      const r = el.getBoundingClientRect();
+      if (touch.clientY > r.top && touch.clientY < r.bottom && i !== dragIdx) {
+        const moved = categories.splice(dragIdx, 1)[0];
+        categories.splice(i, 0, moved);
+        dragIdx = i;
+        saveCats(); renderCatManage();
+        dragEl = list.querySelectorAll('.cat-wrap')[dragIdx];
+        if (dragEl) { dragEl.style.opacity = '0.6'; dragEl.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)'; }
+      }
+    });
+  }, {passive:false});
+
+  document.addEventListener('touchend', () => {
+    clearTimeout(longPressTimer);
+    if (dragEl) {
+      dragEl.style.opacity = '1';
+      dragEl.style.boxShadow = '';
+      dragEl = null; dragIdx = null; isDragging = false;
+    }
+  });
+}
+
+let catEditMode = false;
+
+  // 編集ボタン
+  document.getElementById('catEditBtn').addEventListener('click', () => {
+    catEditMode = !catEditMode;
+    document.getElementById('catEditBtn').textContent = catEditMode ? '✅ 完了' : '✏️ 編集';
+    document.getElementById('catEditBtn').style.color = catEditMode ? 'var(--success)' : 'var(--text2)';
+    document.getElementById('addCatRow').style.display = catEditMode ? 'flex' : 'none';
+    renderCatManage();
+  });
+
+document.getElementById('addCatBtn').addEventListener('click', () => {
+  const input = document.getElementById('newCatInput');
+  const raw = input.value.trim();
+  if (!raw) return;
+  if (categories.find(c=>c.name===raw)) { alert('同じ名前のカテゴリーがあります'); return; }
+  categories.push({name: raw, emoji: ''});
+  saveCats(); renderCatManage();
+  input.value = '';
+});
+
+// Export
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(items, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `wishlist_${new Date().toISOString().slice(0,10)}.json`; a.click();
+  URL.revokeObjectURL(url);
+});
+
+// Import
+document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const imported = JSON.parse(ev.target.result);
+      if (!Array.isArray(imported)) throw new Error();
+      if (confirm(`${imported.length}件をインポートします。現在のデータに追加しますか？`)) {
+        const existingIds = new Set(items.map(i=>i.id));
+        const newItems = imported.filter(i=>!existingIds.has(i.id));
+        items = [...newItems, ...items];
+        save(); render(); renderBought();
+        alert(`${newItems.length}件追加しました`);
+      }
+    } catch { alert('読み込みに失敗しました'); }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+
+// ===== List edit mode =====
+let listEditMode = false;
+let selectedIds = new Set();
+let boughtEditMode = false;
+let boughtSelectedIds = new Set();
+let boughtSelectedCategories = new Set();
+
+function setListEditMode(on) {
+  listEditMode = on;
+  selectedIds.clear();
+  const btn = document.getElementById('listEditBtn');
+  btn.textContent = on ? '完了' : '編集';
+  btn.style.color = on ? '#e8380d' : '#666';
+  const bar = document.getElementById('bulkBar');
+  bar.style.display = on ? 'flex' : 'none';
+  updateBulkBar();
+  render();
+}
+
+function updateBulkBar() {
+  document.getElementById('bulkCount').textContent = selectedIds.size + '件選択';
+}
+
+// ===== Wish list drag sort =====
+let wishDragIdx = null, wishDragEl = null, wishLongTimer = null, wishIsDragging = false;
+
+document.addEventListener('touchmove', e => {
+  if (!wishIsDragging || !wishDragEl) return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  const list = document.getElementById('list');
+  const wraps = [...list.querySelectorAll('.card-wrap')];
+  wraps.forEach((el, i) => {
+    if (el === wishDragEl) return;
+    const r = el.getBoundingClientRect();
+    if (touch.clientY > r.top && touch.clientY < r.bottom && i !== wishDragIdx) {
+      const wishItems = items.filter(it => !it.bought);
+      const movedItem = wishItems[wishDragIdx];
+      const gFrom = items.indexOf(movedItem);
+      const targetItem = wishItems[i];
+      const gTo = items.indexOf(targetItem);
+      items.splice(gFrom, 1);
+      items.splice(gTo, 0, movedItem);
+      wishDragIdx = i;
+      save(); render();
+      wishDragEl = list.querySelectorAll('.card-wrap')[wishDragIdx];
+      if (wishDragEl) {
+        wishDragEl.style.opacity = '0.6';
+        wishDragEl.style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)';
+      }
+    }
+  });
+}, {passive: false});
+
+document.addEventListener('touchend', () => {
+  clearTimeout(wishLongTimer);
+  if (wishDragEl) {
+    wishDragEl.style.opacity = '';
+    wishDragEl.style.boxShadow = '';
+    wishDragEl = null; wishDragIdx = null; wishIsDragging = false;
+  }
+});
+
+document.getElementById('listEditBtn').addEventListener('click', () => {
+  setListEditMode(!listEditMode);
+});
+document.getElementById('bulkDeleteBtn').addEventListener('click', () => {
+  if (selectedIds.size === 0) return;
+  if (confirm(selectedIds.size + '件を削除しますか？')) {
+    items = items.filter(i => !selectedIds.has(i.id));
+    save(); setListEditMode(false);
+  }
+});
+document.getElementById('filterBtn').style.visibility = 'visible';
+document.getElementById('listEditBtn').style.visibility = 'visible';
+document.getElementById('filterBtn2').style.visibility = 'hidden';
+document.getElementById('boughtEditBtn').style.visibility = 'hidden';
+
+// ===== Bought edit mode =====
+
+function setBoughtEditMode(on) {
+  boughtEditMode = on;
+  boughtSelectedIds.clear();
+  const btn = document.getElementById('boughtEditBtn');
+  btn.textContent = on ? '完了' : '編集';
+  btn.style.color = on ? '#e8380d' : '#666';
+  const bar = document.getElementById('boughtBulkBar');
+  bar.style.display = on ? 'flex' : 'none';
+  updateBoughtBulkBar();
+  renderBought();
+}
+
+function updateBoughtBulkBar() {
+  document.getElementById('boughtBulkCount').textContent = boughtSelectedIds.size + '件選択';
+}
+
+document.getElementById('boughtEditBtn').addEventListener('click', () => {
+  setBoughtEditMode(!boughtEditMode);
+});
+
+document.getElementById('boughtBulkDeleteBtn').addEventListener('click', () => {
+  if (boughtSelectedIds.size === 0) return;
+  if (confirm(boughtSelectedIds.size + '件を削除しますか？')) {
+    items = items.filter(i => !boughtSelectedIds.has(i.id));
+    save(); setBoughtEditMode(false);
+  }
+});
+
+// 買ったものフィルター
+document.getElementById('filterBtn2').addEventListener('click', () => {
+  const cats = [...new Set(items.filter(i=>i.bought).map(i=>i.category).filter(Boolean))];
+  const list = document.getElementById('filterCatList');
+  list.innerHTML = cats.length === 0
+    ? '<div style="padding:14px;color:#aaa;font-size:13px">カテゴリーなし</div>'
+    : cats.map(c => `
+      <label style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:14px">
+        <input type="checkbox" data-cat="${c}" ${boughtSelectedCategories.has(c)?'checked':''}
+          style="width:18px;height:18px;accent-color:#e8380d;cursor:pointer">
+        <span>${getEmoji(c)} ${c}</span>
+        <span style="margin-left:auto;color:#aaa;font-size:12px">${items.filter(i=>i.category===c&&i.bought).length}件</span>
+      </label>`).join('');
+  list.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) boughtSelectedCategories.add(cb.dataset.cat);
+      else boughtSelectedCategories.delete(cb.dataset.cat);
+      renderBought();
+    });
+  });
+  document.getElementById('filterDrawer').classList.add('open');
+  document.getElementById('filterOverlay').classList.add('open');
+});
+
+
+// ===== Firebase Auth =====
+let currentUser = null;
+
+function showAuthModal(view) {
+  document.getElementById('authModal').style.display = 'flex';
+  document.getElementById('authViewLogin').style.display = view === 'login' ? 'block' : 'none';
+  document.getElementById('authViewRegister').style.display = view === 'register' ? 'block' : 'none';
+  document.getElementById('authViewAccount').style.display = view === 'account' ? 'block' : 'none';
+}
+
+function hideAuthModal() {
+  document.getElementById('authModal').style.display = 'none';
+}
+
+function updateAccountUI(user) {
+  currentUser = user;
+  const nameEl = document.getElementById('accountName');
+  const emailEl = document.getElementById('accountEmail');
+  if (user) {
+    nameEl.textContent = user.displayName || 'ユーザー';
+    emailEl.textContent = user.email;
+  } else {
+    nameEl.textContent = 'ログインしていません';
+    emailEl.textContent = '';
+  }
+}
+
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function hideError(id) {
+  document.getElementById(id).style.display = 'none';
+}
+
+// アカウント行タップ
+document.getElementById('accountRow').addEventListener('click', () => {
+  if (!window._fb) return;
+  if (currentUser) {
+    document.getElementById('acctName').textContent = currentUser.displayName || 'ユーザー';
+    document.getElementById('acctEmail').textContent = currentUser.email;
+    document.getElementById('pwError').style.display = 'none';
+    document.getElementById('pwSuccess').style.display = 'none';
+    document.getElementById('newPassword').value = '';
+    showAuthModal('account');
+  } else {
+    showAuthModal('login');
+  }
+});
+
+// ログイン→登録切替
+document.getElementById('toRegisterBtn').addEventListener('click', () => showAuthModal('register'));
+document.getElementById('toLoginBtn').addEventListener('click', () => showAuthModal('login'));
+document.getElementById('authCloseBtn').addEventListener('click', hideAuthModal);
+document.getElementById('regCloseBtn').addEventListener('click', hideAuthModal);
+document.getElementById('acctCloseBtn').addEventListener('click', hideAuthModal);
+
+// ログイン
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  if (!window._fb) return;
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  hideError('authError');
+  try {
+    const cred = await window._fb.signInWithEmailAndPassword(window._fb.auth, email, password);
+    const data = await window._fb.loadFromFirestore(cred.user.uid);
+    if (data) {
+      if (data.items) items = JSON.parse(data.items);
+      if (data.categories) categories = JSON.parse(data.categories);
+      save(); saveCats();
+    }
+    render(); renderBought();
+    hideAuthModal();
+  } catch(e) {
+    showError('authError', 'メールアドレスまたはパスワードが正しくありません');
+  }
+});
+
+// 新規登録
+document.getElementById('registerBtn').addEventListener('click', async () => {
+  if (!window._fb) return;
+  const name = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const password = document.getElementById('regPassword').value;
+  hideError('regError');
+  if (!name) { showError('regError', 'ユーザー名を入力してください'); return; }
+  if (password.length < 6) { showError('regError', 'パスワードは6文字以上です'); return; }
+  try {
+    const cred = await window._fb.createUserWithEmailAndPassword(window._fb.auth, email, password);
+    await window._fb.updateProfile(cred.user, { displayName: name });
+    await window._fb.saveToFirestore(cred.user.uid, items, categories);
+    render(); renderBought();
+    hideAuthModal();
+  } catch(e) {
+    showError('regError', e.code === 'auth/email-already-in-use' ? 'このメールアドレスは既に使われています' : '登録に失敗しました');
+  }
+});
+
+// パスワード変更
+document.getElementById('changePasswordBtn').addEventListener('click', async () => {
+  if (!window._fb || !currentUser) return;
+  const newPw = document.getElementById('newPassword').value;
+  document.getElementById('pwError').style.display = 'none';
+  document.getElementById('pwSuccess').style.display = 'none';
+  if (newPw.length < 6) { showError('pwError', 'パスワードは6文字以上です'); return; }
+  try {
+    await window._fb.updatePassword(currentUser, newPw);
+    document.getElementById('pwSuccess').style.display = 'block';
+    document.getElementById('newPassword').value = '';
+  } catch(e) {
+    showError('pwError', '変更に失敗しました。再ログインして試してください');
+  }
+});
+
+// ログアウト
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  if (!window._fb) return;
+  await window._fb.signOut(window._fb.auth);
+  hideAuthModal();
+});
+
+// 認証状態監視
+setTimeout(() => {
+  if (!window._fb) return;
+  window._fb.onAuthStateChanged(window._fb.auth, async (user) => {
+    updateAccountUI(user);
+    if (user) {
+      const data = await window._fb.loadFromFirestore(user.uid);
+      if (data) {
+        if (data.items) items = JSON.parse(data.items);
+        if (data.categories) categories = JSON.parse(data.categories);
+        save(); saveCats();
+        render(); renderBought();
+      }
+    }
+  });
+}, 1000);
+
+// save時にFirestoreにも保存
+const _origSave = save;
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  if (currentUser && window._fb) {
+    window._fb.saveToFirestore(currentUser.uid, items, categories);
+  }
+}
+
+// Init
+render();
+</script>
+</body>
+</html>
