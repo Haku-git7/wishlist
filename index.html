@@ -91,12 +91,13 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     left: 0;
     right: 0;
     bottom: 0;
-    height: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px));
+    height: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 24px);
     background: #ffffff;
     border-top: 1px solid var(--border);
     display: flex;
     z-index: 200;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+    align-items: flex-start;
   }
 
   .tab-item {
@@ -163,7 +164,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   /* Total bar - just above tab bar */
   .total-bar {
     position: fixed;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px + var(--tab-h));
+    bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 24px);
     left: 0;
     right: 0;
     background: rgba(255,255,255,0.98);
