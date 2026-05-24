@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -44,7 +44,7 @@ async function loadFromFirestore(uid) {
 }
 
 // グローバルに公開
-window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail };
+window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail, sendEmailVerification };
 </script>
 <style>
   :root {
@@ -90,15 +90,13 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     position: fixed;
     left: 0;
     right: 0;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
-    height: var(--tab-h);
+    bottom: 0;
+    height: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px));
     background: #ffffff;
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    margin: 0 10px;
+    border-top: 1px solid var(--border);
     display: flex;
     z-index: 200;
-    overflow: hidden;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .tab-item {
@@ -1493,6 +1491,13 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
   try {
     const localItems = [...items];
     const cred = await window._fb.signInWithEmailAndPassword(window._fb.auth, email, password);
+    if (!cred.user.emailVerified) {
+      await window._fb.signOut(window._fb.auth);
+      showError('authError', 'メールアドレスの確認が完了していません。確認メールのリンクをクリックしてください。');
+      const resend = confirm('確認メールを再送しますか？');
+      if (resend) await window._fb.sendEmailVerification(cred.user);
+      return;
+    }
     const data = await window._fb.loadFromFirestore(cred.user.uid);
     if (data) {
       const remoteItems = data.items ? JSON.parse(data.items) : [];
@@ -1526,9 +1531,11 @@ document.getElementById('registerBtn').addEventListener('click', async () => {
   try {
     const cred = await window._fb.createUserWithEmailAndPassword(window._fb.auth, email, password);
     await window._fb.updateProfile(cred.user, { displayName: name });
+    await window._fb.sendEmailVerification(cred.user);
     await window._fb.saveToFirestore(cred.user.uid, items, categories);
     render(); renderBought();
     hideAuthModal();
+    alert('確認メールを ' + email + ' に送信しました。メール内のリンクをクリックして登録を完了してください。');
   } catch(e) {
     showError('regError', e.code === 'auth/email-already-in-use' ? 'このメールアドレスは既に使われています' : '登録に失敗しました');
   }
