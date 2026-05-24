@@ -46,7 +46,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 </script>
 <style>
   :root {
-    --bg: #f5f5f5;
+    --bg: #f2f2f7;
     --surface: #ffffff;
     --surface2: #f0f0f0;
     --border: #e0e0e0;
@@ -57,12 +57,12 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     --danger: #e8380d;
     --success: #00a651;
     --radius: 12px;
-    --tab-h: 60px;
+    --tab-h: 52px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   body {
     font-family: 'Zen Kaku Gothic New', sans-serif;
-    background: var(--bg);
+    background: #ffffff;
     color: var(--text);
     min-height: 100vh;
     overflow-x: hidden;
@@ -87,9 +87,18 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   .tab-bar {
     position: fixed; bottom: 0; left: 0; right: 0;
     height: var(--tab-h);
-    background: var(--surface);
+    background: #ffffff;
     border-top: 1px solid var(--border);
     display: flex; z-index: 200;
+  }
+  /* タブバー下のセーフエリアも白に */
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: env(safe-area-inset-bottom, 0px);
+    background: #ffffff;
+    z-index: 199;
   }
   .tab-item {
     flex: 1; display: flex; flex-direction: column;
@@ -305,7 +314,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   /* ===== ADD/EDIT MODAL (full screen) ===== */
   .fullscreen-modal {
     display: none; position: fixed; inset: 0;
-    background: var(--bg); z-index: 600;
+    background: #ffffff; z-index: 600;
     overflow-y: auto;
     animation: slideInUp 0.3s ease;
     padding-bottom: 100px;
@@ -485,24 +494,41 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 </head>
 <body>
 
-<div class="header">
+<!-- 欲しいもの用ヘッダー -->
+<div class="header" id="header-wish">
   <div class="header-title">ほしい<span>もの</span></div>
-  <div style="display:flex;align-items:center;gap:6px;min-width:0;">
+  <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
     <div class="header-stats" id="statsText" style="white-space:nowrap;">0件</div>
-    <div style="display:flex;align-items:center;gap:4px;width:90px;justify-content:flex-end;flex-shrink:0;">
-      <button class="filter-icon-btn" id="filterBtn" title="絞り込み" style="visibility:hidden;">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-        </svg>
-      </button>
-      <button class="filter-icon-btn" id="filterBtn2" title="絞り込み" style="visibility:hidden;display:flex;">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-        </svg>
-      </button>
-      <button id="listEditBtn" style="background:none;border:none;cursor:pointer;font-size:13px;color:#666;font-family:'Zen Kaku Gothic New',sans-serif;padding:2px 4px;white-space:nowrap;visibility:hidden;">編集</button>
-      <button id="boughtEditBtn" style="background:none;border:none;cursor:pointer;font-size:13px;color:#666;font-family:'Zen Kaku Gothic New',sans-serif;padding:2px 4px;white-space:nowrap;visibility:hidden;">編集</button>
-    </div>
+    <button class="filter-icon-btn" id="filterBtn" title="絞り込み">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+      </svg>
+    </button>
+    <button id="listEditBtn" style="background:none;border:none;cursor:pointer;font-size:13px;color:#666;font-family:'Zen Kaku Gothic New',sans-serif;padding:2px 4px;white-space:nowrap;">編集</button>
+  </div>
+</div>
+
+<!-- 買ったもの用ヘッダー -->
+<div class="header" id="header-bought" style="display:none;">
+  <div class="header-title">ほしい<span>もの</span></div>
+  <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+    <div class="header-stats" id="statsText2" style="white-space:nowrap;">0件</div>
+    <button class="filter-icon-btn" id="filterBtn2" title="絞り込み">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+      </svg>
+    </button>
+    <button id="boughtEditBtn" style="background:none;border:none;cursor:pointer;font-size:13px;color:#666;font-family:'Zen Kaku Gothic New',sans-serif;padding:2px 4px;white-space:nowrap;">編集</button>
+  </div>
+</div>
+
+<!-- その他用ヘッダー -->
+<div class="header" id="header-other" style="display:none;">
+  <div class="header-title">ほしい<span>もの</span></div>
+  <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;opacity:0;pointer-events:none;">
+    <div style="white-space:nowrap;font-size:12px;">　</div>
+    <div style="width:20px;height:20px;"></div>
+    <div style="font-size:13px;padding:2px 4px;">編集</div>
   </div>
 </div>
 <div id="bulkBar" style="display:none;position:sticky;top:48px;z-index:99;background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 14px;align-items:center;justify-content:space-between;">
@@ -751,10 +777,10 @@ document.querySelectorAll('.tab-item').forEach(btn => {
     document.getElementById('fabBtn').style.display = isWish ? 'flex' : 'none';
     document.getElementById('totalAmount').parentElement.style.display = isWish ? 'flex' : 'none';
     const isBought = currentTab === 'bought';
-    document.getElementById('filterBtn').style.visibility = isWish ? 'visible' : 'hidden';
-    document.getElementById('filterBtn2').style.visibility = isBought ? 'visible' : 'hidden';
-    document.getElementById('listEditBtn').style.visibility = isWish ? 'visible' : 'hidden';
-    document.getElementById('boughtEditBtn').style.visibility = isBought ? 'visible' : 'hidden';
+    const isOther = currentTab === 'other';
+    document.getElementById('header-wish').style.display = isWish ? 'flex' : 'none';
+    document.getElementById('header-bought').style.display = isBought ? 'flex' : 'none';
+    document.getElementById('header-other').style.display = isOther ? 'flex' : 'none';
     if (!isWish && listEditMode) setListEditMode(false);
     if (!isBought && boughtEditMode) setBoughtEditMode(false);
     if (currentTab === 'bought') renderBought();
@@ -810,7 +836,7 @@ function renderBought() {
   }
   document.getElementById('filterBtn2').classList.toggle('active', boughtSelectedCategories.size > 0);
   if (currentTab === 'bought') {
-    document.getElementById('statsText').textContent = `${items.filter(i=>i.bought).length}件`;
+    document.getElementById('statsText2').textContent = items.filter(i=>i.bought).length + '件';
   }
 }
 
@@ -819,11 +845,18 @@ function cardHTML(item) {
     ? `<div class="card-thumb" style="background-image:url('${item.image}');"></div>`
     : `<div class="card-thumb">${getEmoji(item.category)}</div>`;
   return `
-    <div class="card-wrap">
+    <div class="card-wrap" data-id="${item.id}">
       <div class="card-delete-bg" data-id="${item.id}">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
         </svg>
+      </div>
+      <div class="card-check-overlay">
+        <div class="check-circle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
       </div>
       <div class="card" data-id="${item.id}">
         <div class="card-inner">
@@ -856,6 +889,30 @@ function setupCardEvents(container) {
       if (dx < -10) card.style.transform = `translateX(${Math.max(dx,-80)}px)`;
       else if (dx > 0 && card.classList.contains('swiped')) card.style.transform = 'translateX(0)';
     }, {passive:true});
+    card.addEventListener('click', e => {
+      if (listEditMode && !card.closest('#boughtList')) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = card.dataset.id;
+        if (selectedIds.has(id)) selectedIds.delete(id);
+        else selectedIds.add(id);
+        updateBulkBar();
+        render();
+        return;
+      }
+
+      if (boughtEditMode && card.closest('#boughtList')) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = card.dataset.id;
+        if (boughtSelectedIds.has(id)) boughtSelectedIds.delete(id);
+        else boughtSelectedIds.add(id);
+        updateBoughtBulkBar();
+        renderBought();
+        return;
+      }
+    });
+
     card.addEventListener('touchend', e => {
       const dx = e.changedTouches[0].clientX - startX;
       if (dx < -45) { card.classList.add('swiped'); card.style.transform = ''; }
@@ -863,6 +920,7 @@ function setupCardEvents(container) {
     });
     card.addEventListener('click', e => {
       if (e.target.classList.contains('btn-check')) return;
+      if (listEditMode || boughtEditMode) return;
       if (card.classList.contains('swiped')) { card.classList.remove('swiped'); return; }
       const item = items.find(i=>i.id===card.dataset.id);
       if (item) openFsModal(item);
@@ -879,7 +937,9 @@ function toggleBought(id) {
 }
 function deleteItem(id) {
   items = items.filter(i=>i.id!==id);
-  save(); render(); renderBought();
+  save(); render(); document.getElementById('boughtBulkBar').style.display = on ? 'flex' : 'none';
+  updateBoughtBulkBar();
+  renderBought();
 }
 
 // ===== Filter drawer =====
@@ -1286,15 +1346,16 @@ document.getElementById('listEditBtn').addEventListener('click', () => {
 });
 document.getElementById('bulkDeleteBtn').addEventListener('click', () => {
   if (selectedIds.size === 0) return;
-  if (confirm(selectedIds.size + '件を削除しますか？')) {
-    items = items.filter(i => !selectedIds.has(i.id));
-    save(); setListEditMode(false);
-  }
+
+  items = items.filter(item => !selectedIds.has(String(item.id)));
+  selectedIds.clear();
+  updateBulkBar();
+  render();
+  save();
 });
-document.getElementById('filterBtn').style.visibility = 'visible';
-document.getElementById('listEditBtn').style.visibility = 'visible';
-document.getElementById('filterBtn2').style.visibility = 'hidden';
-document.getElementById('boughtEditBtn').style.visibility = 'hidden';
+document.getElementById('header-wish').style.display = 'flex';
+document.getElementById('header-bought').style.display = 'none';
+document.getElementById('header-other').style.display = 'none';
 
 // ===== Bought edit mode =====
 
@@ -1320,10 +1381,12 @@ document.getElementById('boughtEditBtn').addEventListener('click', () => {
 
 document.getElementById('boughtBulkDeleteBtn').addEventListener('click', () => {
   if (boughtSelectedIds.size === 0) return;
-  if (confirm(boughtSelectedIds.size + '件を削除しますか？')) {
-    items = items.filter(i => !boughtSelectedIds.has(i.id));
-    save(); setBoughtEditMode(false);
-  }
+
+  items = items.filter(item => !boughtSelectedIds.has(String(item.id)));
+  boughtSelectedIds.clear();
+  updateBoughtBulkBar();
+  renderBought();
+  save();
 });
 
 // 買ったものフィルター
