@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -42,7 +42,7 @@ async function loadFromFirestore(uid) {
 }
 
 // グローバルに公開
-window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile };
+window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail };
 </script>
 <style>
   :root {
@@ -85,21 +85,20 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 
   /* Tab bar */
   .tab-bar {
-    position: fixed; bottom: 0; left: 0; right: 0;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
     height: var(--tab-h);
     background: #ffffff;
-    border-top: 1px solid var(--border);
-    display: flex; z-index: 200;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    margin: 0 10px;
+    display: flex;
+    z-index: 200;
+    overflow: hidden;
   }
-  /* タブバー下のセーフエリアも白に */
-  body::after {
-    content: '';
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    height: env(safe-area-inset-bottom, 0px);
-    background: #ffffff;
-    z-index: 199;
-  }
+
   .tab-item {
     flex: 1; display: flex; flex-direction: column;
     align-items: center; justify-content: center;
@@ -164,7 +163,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   /* Total bar - just above tab bar */
   .total-bar {
     position: fixed;
-    bottom: 60px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px + var(--tab-h));
     left: 0;
     right: 0;
     background: rgba(255,255,255,0.98);
@@ -342,13 +341,13 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   }
   .fs-save-fixed {
     position: fixed;
-    bottom: 28px;
-    right: 20px;
-    width: 64px;
-    height: 64px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+    right: 24px;
+    width: 70px;
+    height: 70px;
     background: var(--accent); color: #fff; border: none;
     border-radius: 50%;
-    font-size: 16px; font-weight: 700; cursor: pointer;
+    font-size: 17px; font-weight: 700; cursor: pointer;
     font-family: 'Zen Kaku Gothic New', sans-serif;
     box-shadow: 0 4px 16px rgba(232,56,13,0.4);
     z-index: 700;
@@ -703,13 +702,14 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
       <div id="authError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
       <button id="loginBtn" style="width:100%;padding:13px;background:#e8380d;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">ログイン</button>
       <button id="toRegisterBtn" style="width:100%;padding:13px;background:#f5f5f5;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">新規登録</button>
+      <button id="resetPasswordBtn" style="width:100%;padding:10px;background:none;color:#007aff;border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:4px;">パスワードをお忘れの方</button>
       <button id="authCloseBtn" style="width:100%;padding:10px;background:none;color:#aaa;border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">キャンセル</button>
     </div>
     <div id="authViewRegister" style="display:none;">
       <div style="font-size:18px;font-weight:700;margin-bottom:20px;text-align:center;">新規登録</div>
       <input id="regName" type="text" placeholder="ユーザー名" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
       <input id="regEmail" type="email" placeholder="メールアドレス" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
-      <input id="regPassword" type="password" placeholder="パスワード（6文字以上）" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;margin-bottom:16px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
+      <input id="regPassword" type="password" placeholder="パスワード（8文字以上）" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;margin-bottom:16px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
       <div id="regError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
       <button id="registerBtn" style="width:100%;padding:13px;background:#e8380d;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">登録する</button>
       <button id="toLoginBtn" style="width:100%;padding:13px;background:#f5f5f5;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">ログインに戻る</button>
@@ -722,10 +722,14 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
         <div id="acctName" style="font-size:16px;font-weight:700;"></div>
         <div id="acctEmail" style="font-size:13px;color:#666;margin-top:4px;"></div>
       </div>
-      <div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:16px;">
+      <div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:12px;">
         <div style="padding:14px;border-bottom:1px solid #e0e0e0;">
-          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">新しいパスワード</div>
-          <input id="newPassword" type="password" placeholder="6文字以上" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">現在のパスワード</div>
+          <input id="currentPassword" type="password" placeholder="現在のパスワード" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
+        </div>
+        <div style="padding:14px;border-bottom:1px solid #e0e0e0;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">新しいパスワード（8文字以上）</div>
+          <input id="newPassword" type="password" placeholder="8文字以上" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
         </div>
         <button id="changePasswordBtn" style="width:100%;padding:12px;background:none;border:none;font-size:14px;color:#e8380d;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;font-weight:700;">パスワードを変更する</button>
       </div>
@@ -994,6 +998,7 @@ function openFsModal(item = null) {
   document.getElementById('fsCatArrow').classList.remove('open');
   document.getElementById('fsCatHeader').classList.add('no-border');
 
+  document.getElementById('inputImage').value = '';
   document.getElementById('fsModal').classList.add('open');
   document.getElementById('fsSave').style.display = 'flex';
 }
@@ -1090,6 +1095,9 @@ document.getElementById('fsSave').addEventListener('click', () => {
   save(); render(); renderBought();
   document.getElementById('fsModal').classList.remove('open');
   document.getElementById('fsSave').style.display = 'none';
+  document.getElementById('inputImage').value = '';
+  selectedImageData = '';
+  editingId = null;
 });
 
 document.getElementById('fabBtn').addEventListener('click', () => openFsModal());
@@ -1459,6 +1467,7 @@ document.getElementById('accountRow').addEventListener('click', () => {
     document.getElementById('acctEmail').textContent = currentUser.email;
     document.getElementById('pwError').style.display = 'none';
     document.getElementById('pwSuccess').style.display = 'none';
+    document.getElementById('currentPassword').value = '';
     document.getElementById('newPassword').value = '';
     showAuthModal('account');
   } else {
@@ -1480,11 +1489,20 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
   const password = document.getElementById('authPassword').value;
   hideError('authError');
   try {
+    const localItems = [...items];
     const cred = await window._fb.signInWithEmailAndPassword(window._fb.auth, email, password);
     const data = await window._fb.loadFromFirestore(cred.user.uid);
     if (data) {
-      if (data.items) items = JSON.parse(data.items);
-      if (data.categories) categories = JSON.parse(data.categories);
+      const remoteItems = data.items ? JSON.parse(data.items) : [];
+      const remoteCategories = data.categories ? JSON.parse(data.categories) : [];
+      // ローカルのデータをマージ（IDが重複しないものだけ追加）
+      const remoteIds = new Set(remoteItems.map(i => i.id));
+      const merged = [...remoteItems, ...localItems.filter(i => !remoteIds.has(i.id))];
+      items = merged;
+      if (remoteCategories.length > 0) categories = remoteCategories;
+      save(); saveCats();
+    } else if (localItems.length > 0) {
+      // Firestoreにデータなし → ローカルデータをそのまま保存
       save(); saveCats();
     }
     render(); renderBought();
@@ -1502,7 +1520,7 @@ document.getElementById('registerBtn').addEventListener('click', async () => {
   const password = document.getElementById('regPassword').value;
   hideError('regError');
   if (!name) { showError('regError', 'ユーザー名を入力してください'); return; }
-  if (password.length < 6) { showError('regError', 'パスワードは6文字以上です'); return; }
+  if (password.length < 8) { showError('regError', 'パスワードは8文字以上です'); return; }
   try {
     const cred = await window._fb.createUserWithEmailAndPassword(window._fb.auth, email, password);
     await window._fb.updateProfile(cred.user, { displayName: name });
@@ -1517,16 +1535,40 @@ document.getElementById('registerBtn').addEventListener('click', async () => {
 // パスワード変更
 document.getElementById('changePasswordBtn').addEventListener('click', async () => {
   if (!window._fb || !currentUser) return;
+  const currentPw = document.getElementById('currentPassword').value;
   const newPw = document.getElementById('newPassword').value;
   document.getElementById('pwError').style.display = 'none';
   document.getElementById('pwSuccess').style.display = 'none';
-  if (newPw.length < 6) { showError('pwError', 'パスワードは6文字以上です'); return; }
+  if (!currentPw) { showError('pwError', '現在のパスワードを入力してください'); return; }
+  if (newPw.length < 8) { showError('pwError', 'パスワードは8文字以上です'); return; }
   try {
+    // 再認証
+    const credential = window._fb.EmailAuthProvider.credential(currentUser.email, currentPw);
+    await window._fb.reauthenticateWithCredential(currentUser, credential);
     await window._fb.updatePassword(currentUser, newPw);
     document.getElementById('pwSuccess').style.display = 'block';
+    document.getElementById('currentPassword').value = '';
     document.getElementById('newPassword').value = '';
   } catch(e) {
-    showError('pwError', '変更に失敗しました。再ログインして試してください');
+    if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+      showError('pwError', '現在のパスワードが正しくありません');
+    } else {
+      showError('pwError', '変更に失敗しました。再ログインして試してください');
+    }
+  }
+});
+
+// パスワードリセットメール送信
+document.getElementById('resetPasswordBtn').addEventListener('click', async () => {
+  if (!window._fb) return;
+  const email = document.getElementById('authEmail').value.trim();
+  if (!email) { showError('authError', 'メールアドレスを入力してください'); return; }
+  try {
+    await window._fb.sendPasswordResetEmail(window._fb.auth, email);
+    hideError('authError');
+    alert(email + ' にパスワードリセットメールを送信しました');
+  } catch(e) {
+    showError('authError', '送信に失敗しました。メールアドレスを確認してください');
   }
 });
 
@@ -1543,13 +1585,18 @@ setTimeout(() => {
   window._fb.onAuthStateChanged(window._fb.auth, async (user) => {
     updateAccountUI(user);
     if (user) {
+      const localItems = [...items];
       const data = await window._fb.loadFromFirestore(user.uid);
       if (data) {
-        if (data.items) items = JSON.parse(data.items);
-        if (data.categories) categories = JSON.parse(data.categories);
-        save(); saveCats();
-        render(); renderBought();
+        const remoteItems = data.items ? JSON.parse(data.items) : [];
+        const remoteCategories = data.categories ? JSON.parse(data.categories) : [];
+        const remoteIds = new Set(remoteItems.map(i => i.id));
+        const merged = [...remoteItems, ...localItems.filter(i => !remoteIds.has(i.id))];
+        items = merged;
+        if (remoteCategories.length > 0) categories = remoteCategories;
       }
+      save(); saveCats();
+      render(); renderBought();
     }
   });
 }, 1000);
