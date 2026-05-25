@@ -6,12 +6,13 @@
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ねこ棚">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<title>ほしいものリスト</title>
+<title>ねこ棚</title>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail, sendEmailVerification, verifyBeforeUpdateEmail, deleteUser } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -44,7 +45,7 @@ async function loadFromFirestore(uid) {
 }
 
 // グローバルに公開
-window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail, sendEmailVerification };
+window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail, sendEmailVerification, verifyBeforeUpdateEmail, deleteUser };
 </script>
 <style>
   :root {
@@ -496,7 +497,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 
 <!-- 欲しいもの用ヘッダー -->
 <div class="header" id="header-wish">
-  <div class="header-title">ほしい<span>もの</span></div>
+  <div class="header-title">ねこ<span>棚</span></div>
   <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
     <div class="header-stats" id="statsText" style="white-space:nowrap;">0件</div>
     <button class="filter-icon-btn" id="filterBtn" title="絞り込み">
@@ -510,7 +511,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 
 <!-- 買ったもの用ヘッダー -->
 <div class="header" id="header-bought" style="display:none;">
-  <div class="header-title">ほしい<span>もの</span></div>
+  <div class="header-title">ねこ<span>棚</span></div>
   <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
     <div class="header-stats" id="statsText2" style="white-space:nowrap;">0件</div>
     <button class="filter-icon-btn" id="filterBtn2" title="絞り込み">
@@ -524,11 +525,15 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 
 <!-- その他用ヘッダー -->
 <div class="header" id="header-other" style="display:none;">
-  <div class="header-title">ほしい<span>もの</span></div>
-  <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;opacity:0;pointer-events:none;">
-    <div style="white-space:nowrap;font-size:12px;">　</div>
-    <div style="width:20px;height:20px;"></div>
-    <div style="font-size:13px;padding:2px 4px;">編集</div>
+  <div class="header-title">ねこ<span>棚</span></div>
+  <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+    <div class="header-stats" style="white-space:nowrap;visibility:hidden;">0件</div>
+    <button class="filter-icon-btn" style="visibility:hidden;pointer-events:none;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+      </svg>
+    </button>
+    <button style="background:none;border:none;font-size:13px;padding:2px 4px;white-space:nowrap;visibility:hidden;pointer-events:none;">編集</button>
   </div>
 </div>
 <div id="bulkBar" style="display:none;position:sticky;top:48px;z-index:99;background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 14px;align-items:center;justify-content:space-between;">
@@ -590,7 +595,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
       </div>
       <input type="file" id="importFile" accept=".json" style="display:none">
     </div>
-    <div class="settings-section">
+    <div class="settings-section" style="border-bottom:1px solid var(--border);">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 6px;box-sizing:border-box;">
         <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);text-transform:uppercase;letter-spacing:1px;">カテゴリー管理</div>
         <button id="catEditBtn" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:13px;padding:2px 6px;border-radius:6px;font-family:'Zen Kaku Gothic New',sans-serif;">✏️ 編集</button>
@@ -736,7 +741,30 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
       </div>
       <div id="pwError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
       <div id="pwSuccess" style="color:#00a651;font-size:13px;margin-bottom:10px;display:none;">パスワードを変更しました</div>
+      <!-- ユーザー名変更 -->
+      <div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:12px;">
+        <div style="padding:14px;border-bottom:1px solid #e0e0e0;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">新しいユーザー名</div>
+          <input id="newUsername" type="text" placeholder="ユーザー名" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
+        </div>
+        <button id="changeUsernameBtn" style="width:100%;padding:12px;background:none;border:none;font-size:14px;color:#e8380d;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;font-weight:700;">ユーザー名を変更する</button>
+      </div>
+      <!-- メールアドレス変更 -->
+      <div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:12px;">
+        <div style="padding:14px;border-bottom:1px solid #e0e0e0;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">新しいメールアドレス</div>
+          <input id="newEmail" type="email" placeholder="新しいメールアドレス" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
+        </div>
+        <div style="padding:14px;border-bottom:1px solid #e0e0e0;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">現在のパスワード（確認用）</div>
+          <input id="emailChangePassword" type="password" placeholder="パスワード" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
+        </div>
+        <button id="changeEmailBtn" style="width:100%;padding:12px;background:none;border:none;font-size:14px;color:#e8380d;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;font-weight:700;">メールアドレスを変更する</button>
+      </div>
+      <div id="acctError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
+      <div id="acctSuccess" style="color:#00a651;font-size:13px;margin-bottom:10px;display:none;"></div>
       <button id="logoutBtn" style="width:100%;padding:13px;background:#f5f5f5;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">ログアウト</button>
+      <button id="deleteAccountBtn" style="width:100%;padding:13px;background:none;color:#e8380d;border:1px solid #e8380d;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">アカウントを削除する</button>
       <button id="acctCloseBtn" style="width:100%;padding:10px;background:none;color:#aaa;border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">閉じる</button>
     </div>
   </div>
@@ -1468,8 +1496,13 @@ document.getElementById('accountRow').addEventListener('click', () => {
     document.getElementById('acctEmail').textContent = currentUser.email;
     document.getElementById('pwError').style.display = 'none';
     document.getElementById('pwSuccess').style.display = 'none';
+    document.getElementById('acctError').style.display = 'none';
+    document.getElementById('acctSuccess').style.display = 'none';
     document.getElementById('currentPassword').value = '';
     document.getElementById('newPassword').value = '';
+    document.getElementById('newUsername').value = '';
+    document.getElementById('newEmail').value = '';
+    document.getElementById('emailChangePassword').value = '';
     showAuthModal('account');
   } else {
     showAuthModal('login');
@@ -1564,6 +1597,79 @@ document.getElementById('changePasswordBtn').addEventListener('click', async () 
       showError('pwError', '現在のパスワードが正しくありません');
     } else {
       showError('pwError', '変更に失敗しました。再ログインして試してください');
+    }
+  }
+});
+
+
+// ユーザー名変更
+document.getElementById('changeUsernameBtn').addEventListener('click', async () => {
+  if (!window._fb || !currentUser) return;
+  const newName = document.getElementById('newUsername').value.trim();
+  document.getElementById('acctError').style.display = 'none';
+  document.getElementById('acctSuccess').style.display = 'none';
+  if (!newName) { document.getElementById('acctError').textContent = 'ユーザー名を入力してください'; document.getElementById('acctError').style.display = 'block'; return; }
+  try {
+    await window._fb.updateProfile(currentUser, { displayName: newName });
+    updateAccountUI(currentUser);
+    document.getElementById('acctName').textContent = newName;
+    document.getElementById('newUsername').value = '';
+    document.getElementById('acctSuccess').textContent = 'ユーザー名を変更しました';
+    document.getElementById('acctSuccess').style.display = 'block';
+  } catch(e) {
+    document.getElementById('acctError').textContent = '変更に失敗しました';
+    document.getElementById('acctError').style.display = 'block';
+  }
+});
+
+// メールアドレス変更
+document.getElementById('changeEmailBtn').addEventListener('click', async () => {
+  if (!window._fb || !currentUser) return;
+  const newEmailVal = document.getElementById('newEmail').value.trim();
+  const pw = document.getElementById('emailChangePassword').value;
+  document.getElementById('acctError').style.display = 'none';
+  document.getElementById('acctSuccess').style.display = 'none';
+  if (!newEmailVal) { document.getElementById('acctError').textContent = '新しいメールアドレスを入力してください'; document.getElementById('acctError').style.display = 'block'; return; }
+  if (!pw) { document.getElementById('acctError').textContent = 'パスワードを入力してください'; document.getElementById('acctError').style.display = 'block'; return; }
+  try {
+    const credential = window._fb.EmailAuthProvider.credential(currentUser.email, pw);
+    await window._fb.reauthenticateWithCredential(currentUser, credential);
+    await window._fb.verifyBeforeUpdateEmail(currentUser, newEmailVal);
+    document.getElementById('newEmail').value = '';
+    document.getElementById('emailChangePassword').value = '';
+    document.getElementById('acctSuccess').textContent = newEmailVal + ' に確認メールを送信しました。メール内のリンクをクリックして変更を完了してください。';
+    document.getElementById('acctSuccess').style.display = 'block';
+  } catch(e) {
+    if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+      document.getElementById('acctError').textContent = 'パスワードが正しくありません';
+    } else if (e.code === 'auth/email-already-in-use') {
+      document.getElementById('acctError').textContent = 'このメールアドレスは既に使われています';
+    } else {
+      document.getElementById('acctError').textContent = '変更に失敗しました';
+    }
+    document.getElementById('acctError').style.display = 'block';
+  }
+});
+
+// アカウント削除
+document.getElementById('deleteAccountBtn').addEventListener('click', async () => {
+  if (!window._fb || !currentUser) return;
+  const confirm1 = confirm('アカウントを削除すると、すべてのデータが失われます。本当に削除しますか？');
+  if (!confirm1) return;
+  const pw = prompt('確認のため現在のパスワードを入力してください：');
+  if (!pw) return;
+  try {
+    const credential = window._fb.EmailAuthProvider.credential(currentUser.email, pw);
+    await window._fb.reauthenticateWithCredential(currentUser, credential);
+    await window._fb.deleteUser(currentUser);
+    items = []; save();
+    hideAuthModal();
+    alert('アカウントを削除しました');
+  } catch(e) {
+    if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+      alert('パスワードが正しくありません');
+    } else {
+      alert('削除に失敗しました。再ログインして試してください');
     }
   }
 });
