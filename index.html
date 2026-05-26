@@ -683,12 +683,12 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     </div>
   </div>
   <div style="padding:14px;">
-    <div class="add-cat-row" id="addCatRow" style="display:none;margin-bottom:12px;">
-      <input class="add-cat-input" id="newCatInput" placeholder="例: 📱 ガジェット" />
-      <button class="add-cat-btn" id="addCatBtn">追加</button>
-    </div>
     <div class="settings-section" style="margin:0;">
       <div id="catList"></div>
+    </div>
+    <div class="add-cat-row" id="addCatRow" style="display:none;margin-top:12px;">
+      <input class="add-cat-input" id="newCatInput" placeholder="例: 📱 ガジェット" />
+      <button class="add-cat-btn" id="addCatBtn">追加</button>
     </div>
   </div>
 </div>
@@ -1825,7 +1825,7 @@ document.getElementById('deleteAccountBtn').addEventListener('click', async () =
   if (!window._fb || !currentUser) return;
   const confirm1 = confirm('アカウントを削除すると、すべてのデータが失われます。本当に削除しますか？');
   if (!confirm1) return;
-  const pw = prompt('確認のため現在のパスワードを入力してください：');
+  const pw = prompt('確認のため現在のパスワードを入力してください');
   if (!pw) return;
   try {
     const credential = window._fb.EmailAuthProvider.credential(currentUser.email, pw);
