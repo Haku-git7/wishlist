@@ -338,6 +338,19 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     padding: 0;
   }
 
+    #authModal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 800;
+    align-items: center;
+    justify-content: center;
+  }
+  #authModal.open {
+    display: flex !important;
+  }
+
   /* Empty */
   .empty { text-align: center; padding: 60px 20px; color: var(--text3); }
   .empty-icon { font-size: 48px; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; }
@@ -770,7 +783,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 </div>
 
 <!-- Auth Modal -->
-<div id="authModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:800;align-items:center;justify-content:center;">
+<div id="authModal">
   <div style="background:#fff;border-radius:16px;padding:24px 20px;width:90%;max-width:360px;max-height:90vh;overflow-y:auto;">
     <div id="authViewLogin">
       <div style="font-size:18px;font-weight:700;margin-bottom:20px;text-align:center;">ログイン</div>
@@ -1543,7 +1556,7 @@ document.getElementById('filterBtn2').addEventListener('click', () => {
 let currentUser = null;
 
 function showAuthModal(view) {
-  document.getElementById('authModal').style.display = 'flex';
+  document.getElementById('authModal').classList.add('open');
   ['authViewLogin','authViewRegister','authViewAccount','authViewUsername','authViewEmail','authViewPassword'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
@@ -1552,7 +1565,7 @@ function showAuthModal(view) {
 }
 
 function hideAuthModal() {
-  document.getElementById('authModal').style.display = 'none';
+  document.getElementById('authModal').classList.remove('open');
 }
 
 function updateAccountUI(user) {
