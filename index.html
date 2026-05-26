@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.json">
+<script>
+window.addEventListener('load', () => {
+  try {
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      navigator.serviceWorker.register('sw.js').catch(e => console.log('SW register skipped:', e.message));
+    }
+  } catch(e) { console.log('SW not available'); }
+});
+</script>
 <link rel="icon" href="icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="ねこ棚">
@@ -290,6 +300,44 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   .card-wrap.selected .check-circle { background: #e8380d; border-color: #e8380d; }
   .card-wrap.selected .check-circle svg { display: block; }
 
+  .cat-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0 16px;
+    box-sizing: border-box;
+  }
+  .cat-header-title {
+    flex: 1;
+    text-align: center;
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .cat-back-btn {
+    width: 60px;
+    text-align: left;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+  }
+  .cat-edit-btn {
+    width: 60px;
+    text-align: right;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--text2);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    padding: 0;
+  }
+
   /* Empty */
   .empty { text-align: center; padding: 60px 20px; color: var(--text3); }
   .empty-icon { font-size: 48px; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; }
@@ -453,13 +501,18 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 
   /* Category management */
   .cat-manage-item {
-    display: flex; align-items: center; padding: 11px 14px;
-    border-top: 1px solid var(--border); gap: 10px; font-size: 14px;
+    display: flex; align-items: center; width: 100%; padding: 11px 14px;
+    border-top: 1px solid var(--border); font-size: 14px;
     background: #fff; cursor: default;
   }
   .cat-manage-item:first-of-type { border-top: none; }
-  .cat-drag-handle { color: var(--text3); font-size: 18px; cursor: grab; touch-action: none; padding: 0 4px; user-select: none; }
-  .cat-label { flex: 1; }
+  .cat-name-input, .cat-label { flex: 1; }
+  .cat-drag-handle {
+    margin-left: auto;
+    color: var(--text3); font-size: 18px; cursor: grab;
+    touch-action: none; padding: 0 4px 0 12px; user-select: none;
+    flex-shrink: 0;
+  }
   /* swipe delete for cat */
   .cat-wrap { position: relative; overflow: hidden; }
   .cat-delete-bg {
@@ -595,16 +648,34 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
       </div>
       <input type="file" id="importFile" accept=".json" style="display:none">
     </div>
-    <div class="settings-section" style="border-bottom:1px solid var(--border);">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 6px;box-sizing:border-box;">
-        <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);text-transform:uppercase;letter-spacing:1px;">カテゴリー管理</div>
-        <button id="catEditBtn" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:13px;padding:2px 6px;border-radius:6px;font-family:'Zen Kaku Gothic New',sans-serif;">✏️ 編集</button>
+    <div class="settings-section">
+      <div class="settings-title">カテゴリー</div>
+      <div class="settings-row" id="toCatManageBtn" style="cursor:pointer;">
+        <span class="settings-row-icon">🗂</span>
+        <span class="settings-row-label">カテゴリー管理</span>
+        <span class="settings-row-arrow">›</span>
       </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- カテゴリー管理画面 -->
+<div class="fullscreen-modal" id="catManageModal">
+  <div class="fs-header">
+    <div class="cat-header-row">
+      <button class="cat-back-btn" id="catManageClose">‹</button>
+      <div class="cat-header-title">カテゴリー管理</div>
+      <button class="cat-edit-btn" id="catEditBtn">編集</button>
+    </div>
+  </div>
+  <div style="padding:14px;">
+    <div class="add-cat-row" id="addCatRow" style="display:none;margin-bottom:12px;">
+      <input class="add-cat-input" id="newCatInput" placeholder="例: 📱 ガジェット" />
+      <button class="add-cat-btn" id="addCatBtn">追加</button>
+    </div>
+    <div class="settings-section" style="margin:0;">
       <div id="catList"></div>
-      <div class="add-cat-row" id="addCatRow" style="display:none;">
-        <input class="add-cat-input" id="newCatInput" placeholder="例: 📱 ガジェット" />
-        <button class="add-cat-btn" id="addCatBtn">追加</button>
-      </div>
     </div>
   </div>
 </div>
@@ -985,7 +1056,7 @@ document.getElementById('filterBtn').addEventListener('click', () => {
       <label style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:14px">
         <input type="checkbox" data-cat="${c}" ${selectedCategories.has(c)?'checked':''}
           style="width:18px;height:18px;accent-color:#e8380d;cursor:pointer">
-        <span>${getEmoji(c)} ${c}</span>
+        <span>${c}</span>
         <span style="margin-left:auto;color:#aaa;font-size:12px">${items.filter(i=>i.category===c&&!i.bought).length}件</span>
       </label>`).join('');
   list.querySelectorAll('input[type=checkbox]').forEach(cb => {
@@ -1132,7 +1203,24 @@ document.getElementById('fsSave').addEventListener('click', () => {
 document.getElementById('fabBtn').addEventListener('click', () => openFsModal());
 
 // ===== その他 =====
-function renderOther() { renderCatManage(); }
+function renderOther() {}
+
+// カテゴリー管理画面の開閉
+document.getElementById('toCatManageBtn').addEventListener('click', () => {
+  document.getElementById('catManageModal').classList.add('open');
+  renderCatManage();
+});
+document.getElementById('catManageClose').addEventListener('click', () => {
+  document.getElementById('catManageModal').classList.remove('open');
+  if (catEditMode) {
+    catEditMode = false;
+    document.getElementById('catEditBtn').textContent = '編集';
+    document.getElementById('catEditBtn').style.color = 'var(--text2)';
+    document.getElementById('addCatRow').style.display = 'none';
+  }
+});
+
+
 
 function renderCatManage() {
   const list = document.getElementById('catList');
@@ -1140,11 +1228,11 @@ function renderCatManage() {
     <div class="cat-wrap" data-idx="${idx}">
       ${catEditMode ? `<div class="cat-delete-bg" data-idx="${idx}">削除</div>` : ''}
       <div class="cat-manage-item" data-idx="${idx}">
-        ${catEditMode ? `<span class="cat-drag-handle" data-idx="${idx}" style="cursor:grab;color:var(--text3);font-size:18px;padding:0 8px;touch-action:none;">☰</span>` : ''}
         ${catEditMode
           ? `<input class="cat-name-input" data-idx="${idx}" value="${c.name}" style="flex:1;border:none;border-bottom:1px solid var(--border);outline:none;font-size:14px;font-family:'Zen Kaku Gothic New',sans-serif;background:transparent;padding:2px 4px;" />`
           : `<span class="cat-label" style="padding-left:14px;">${c.name}</span>`
         }
+        ${catEditMode ? `<span class="cat-drag-handle" data-idx="${idx}">☰</span>` : ''}
       </div>
     </div>`).join('');
 
@@ -1267,7 +1355,7 @@ let catEditMode = false;
   // 編集ボタン
   document.getElementById('catEditBtn').addEventListener('click', () => {
     catEditMode = !catEditMode;
-    document.getElementById('catEditBtn').textContent = catEditMode ? '✅ 完了' : '✏️ 編集';
+    document.getElementById('catEditBtn').textContent = catEditMode ? '完了' : '編集';
     document.getElementById('catEditBtn').style.color = catEditMode ? 'var(--success)' : 'var(--text2)';
     document.getElementById('addCatRow').style.display = catEditMode ? 'flex' : 'none';
     renderCatManage();
@@ -1436,7 +1524,7 @@ document.getElementById('filterBtn2').addEventListener('click', () => {
       <label style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:14px">
         <input type="checkbox" data-cat="${c}" ${boughtSelectedCategories.has(c)?'checked':''}
           style="width:18px;height:18px;accent-color:#e8380d;cursor:pointer">
-        <span>${getEmoji(c)} ${c}</span>
+        <span>${c}</span>
         <span style="margin-left:auto;color:#aaa;font-size:12px">${items.filter(i=>i.category===c&&i.bought).length}件</span>
       </label>`).join('');
   list.querySelectorAll('input[type=checkbox]').forEach(cb => {
@@ -1456,9 +1544,11 @@ let currentUser = null;
 
 function showAuthModal(view) {
   document.getElementById('authModal').style.display = 'flex';
-  document.getElementById('authViewLogin').style.display = view === 'login' ? 'block' : 'none';
-  document.getElementById('authViewRegister').style.display = view === 'register' ? 'block' : 'none';
-  document.getElementById('authViewAccount').style.display = view === 'account' ? 'block' : 'none';
+  ['authViewLogin','authViewRegister','authViewAccount','authViewUsername','authViewEmail','authViewPassword'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  const el = document.getElementById('authView' + view.charAt(0).toUpperCase() + view.slice(1));
+  if (el) el.style.display = 'block';
 }
 
 function hideAuthModal() {
@@ -1494,15 +1584,8 @@ document.getElementById('accountRow').addEventListener('click', () => {
   if (currentUser) {
     document.getElementById('acctName').textContent = currentUser.displayName || 'ユーザー';
     document.getElementById('acctEmail').textContent = currentUser.email;
-    document.getElementById('pwError').style.display = 'none';
-    document.getElementById('pwSuccess').style.display = 'none';
-    document.getElementById('acctError').style.display = 'none';
-    document.getElementById('acctSuccess').style.display = 'none';
-    document.getElementById('currentPassword').value = '';
-    document.getElementById('newPassword').value = '';
-    document.getElementById('newUsername').value = '';
-    document.getElementById('newEmail').value = '';
-    document.getElementById('emailChangePassword').value = '';
+    document.getElementById('acctNamePreview').textContent = currentUser.displayName || '';
+    document.getElementById('acctEmailPreview').textContent = currentUser.email || '';
     showAuthModal('account');
   } else {
     showAuthModal('login');
@@ -1602,23 +1685,50 @@ document.getElementById('changePasswordBtn').addEventListener('click', async () 
 });
 
 
+
+// アカウントサブ画面ナビゲーション
+document.getElementById('toUsernameBtn').addEventListener('click', () => {
+  document.getElementById('newUsername').value = '';
+  document.getElementById('usernameError').style.display = 'none';
+  document.getElementById('usernameSuccess').style.display = 'none';
+  showAuthModal('username');
+});
+document.getElementById('toEmailBtn').addEventListener('click', () => {
+  document.getElementById('newEmail').value = '';
+  document.getElementById('emailChangePassword').value = '';
+  document.getElementById('emailError').style.display = 'none';
+  document.getElementById('emailSuccess').style.display = 'none';
+  showAuthModal('email');
+});
+document.getElementById('toPasswordBtn').addEventListener('click', () => {
+  document.getElementById('currentPassword').value = '';
+  document.getElementById('newPassword').value = '';
+  document.getElementById('pwError').style.display = 'none';
+  document.getElementById('pwSuccess').style.display = 'none';
+  showAuthModal('password');
+});
+document.getElementById('backFromUsernameBtn').addEventListener('click', () => showAuthModal('account'));
+document.getElementById('backFromEmailBtn').addEventListener('click', () => showAuthModal('account'));
+document.getElementById('backFromPasswordBtn').addEventListener('click', () => showAuthModal('account'));
+
 // ユーザー名変更
 document.getElementById('changeUsernameBtn').addEventListener('click', async () => {
   if (!window._fb || !currentUser) return;
   const newName = document.getElementById('newUsername').value.trim();
-  document.getElementById('acctError').style.display = 'none';
-  document.getElementById('acctSuccess').style.display = 'none';
-  if (!newName) { document.getElementById('acctError').textContent = 'ユーザー名を入力してください'; document.getElementById('acctError').style.display = 'block'; return; }
+  document.getElementById('usernameError').style.display = 'none';
+  document.getElementById('usernameSuccess').style.display = 'none';
+  if (!newName) { document.getElementById('usernameError').textContent = 'ユーザー名を入力してください'; document.getElementById('usernameError').style.display = 'block'; return; }
   try {
     await window._fb.updateProfile(currentUser, { displayName: newName });
     updateAccountUI(currentUser);
     document.getElementById('acctName').textContent = newName;
+    document.getElementById('acctNamePreview').textContent = newName;
     document.getElementById('newUsername').value = '';
-    document.getElementById('acctSuccess').textContent = 'ユーザー名を変更しました';
-    document.getElementById('acctSuccess').style.display = 'block';
+    document.getElementById('usernameSuccess').textContent = 'ユーザー名を変更しました';
+    document.getElementById('usernameSuccess').style.display = 'block';
   } catch(e) {
-    document.getElementById('acctError').textContent = '変更に失敗しました';
-    document.getElementById('acctError').style.display = 'block';
+    document.getElementById('usernameError').textContent = '変更に失敗しました';
+    document.getElementById('usernameError').style.display = 'block';
   }
 });
 
@@ -1627,27 +1737,27 @@ document.getElementById('changeEmailBtn').addEventListener('click', async () => 
   if (!window._fb || !currentUser) return;
   const newEmailVal = document.getElementById('newEmail').value.trim();
   const pw = document.getElementById('emailChangePassword').value;
-  document.getElementById('acctError').style.display = 'none';
-  document.getElementById('acctSuccess').style.display = 'none';
-  if (!newEmailVal) { document.getElementById('acctError').textContent = '新しいメールアドレスを入力してください'; document.getElementById('acctError').style.display = 'block'; return; }
-  if (!pw) { document.getElementById('acctError').textContent = 'パスワードを入力してください'; document.getElementById('acctError').style.display = 'block'; return; }
+  document.getElementById('emailError').style.display = 'none';
+  document.getElementById('emailSuccess').style.display = 'none';
+  if (!newEmailVal) { document.getElementById('emailError').textContent = '新しいメールアドレスを入力してください'; document.getElementById('emailError').style.display = 'block'; return; }
+  if (!pw) { document.getElementById('emailError').textContent = 'パスワードを入力してください'; document.getElementById('emailError').style.display = 'block'; return; }
   try {
     const credential = window._fb.EmailAuthProvider.credential(currentUser.email, pw);
     await window._fb.reauthenticateWithCredential(currentUser, credential);
     await window._fb.verifyBeforeUpdateEmail(currentUser, newEmailVal);
     document.getElementById('newEmail').value = '';
     document.getElementById('emailChangePassword').value = '';
-    document.getElementById('acctSuccess').textContent = newEmailVal + ' に確認メールを送信しました。メール内のリンクをクリックして変更を完了してください。';
-    document.getElementById('acctSuccess').style.display = 'block';
+    document.getElementById('emailSuccess').textContent = newEmailVal + ' に確認メールを送信しました。';
+    document.getElementById('emailSuccess').style.display = 'block';
   } catch(e) {
     if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
-      document.getElementById('acctError').textContent = 'パスワードが正しくありません';
+      document.getElementById('emailError').textContent = 'パスワードが正しくありません';
     } else if (e.code === 'auth/email-already-in-use') {
-      document.getElementById('acctError').textContent = 'このメールアドレスは既に使われています';
+      document.getElementById('emailError').textContent = 'このメールアドレスは既に使われています';
     } else {
-      document.getElementById('acctError').textContent = '変更に失敗しました';
+      document.getElementById('emailError').textContent = '変更に失敗しました';
     }
-    document.getElementById('acctError').style.display = 'block';
+    document.getElementById('emailError').style.display = 'block';
   }
 });
 
