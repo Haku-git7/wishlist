@@ -338,7 +338,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     padding: 0;
   }
 
-    #authModal {
+  #authModal {
     display: none;
     position: fixed;
     inset: 0;
@@ -805,52 +805,96 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
       <button id="toLoginBtn" style="width:100%;padding:13px;background:#f5f5f5;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">ログインに戻る</button>
       <button id="regCloseBtn" style="width:100%;padding:10px;background:none;color:#aaa;border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">キャンセル</button>
     </div>
+    <!-- アカウントトップ -->
     <div id="authViewAccount" style="display:none;">
       <div style="font-size:18px;font-weight:700;margin-bottom:20px;text-align:center;">アカウント</div>
-      <div style="text-align:center;margin-bottom:20px;">
+      <div style="text-align:center;margin-bottom:24px;">
         <div style="font-size:40px;margin-bottom:8px;">👤</div>
         <div id="acctName" style="font-size:16px;font-weight:700;"></div>
         <div id="acctEmail" style="font-size:13px;color:#666;margin-top:4px;"></div>
+      </div>
+      <div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:16px;">
+        <div id="toUsernameBtn" style="display:flex;align-items:center;padding:14px;cursor:pointer;border-bottom:1px solid #e0e0e0;">
+          <span style="flex:1;font-size:15px;">ユーザー名</span>
+          <span id="acctNamePreview" style="font-size:13px;color:#aaa;margin-right:8px;"></span>
+          <span style="color:#aaa;">›</span>
+        </div>
+        <div id="toEmailBtn" style="display:flex;align-items:center;padding:14px;cursor:pointer;border-bottom:1px solid #e0e0e0;">
+          <span style="flex:1;font-size:15px;">メールアドレス</span>
+          <span id="acctEmailPreview" style="font-size:13px;color:#aaa;margin-right:8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+          <span style="color:#aaa;">›</span>
+        </div>
+        <div id="toPasswordBtn" style="display:flex;align-items:center;padding:14px;cursor:pointer;">
+          <span style="flex:1;font-size:15px;">パスワード</span>
+          <span style="color:#aaa;">›</span>
+        </div>
+      </div>
+      <button id="logoutBtn" style="width:100%;padding:13px;background:#f5f5f5;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">ログアウト</button>
+      <button id="deleteAccountBtn" style="width:100%;padding:13px;background:none;color:#e8380d;border:1px solid #e8380d;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">アカウントを削除する</button>
+      <button id="acctCloseBtn" style="width:100%;padding:10px;background:none;color:#aaa;border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">閉じる</button>
+    </div>
+
+    <!-- ユーザー名変更 -->
+    <div id="authViewUsername" style="display:none;">
+      <div style="display:flex;align-items:center;margin-bottom:20px;">
+        <button id="backFromUsernameBtn" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;margin-right:8px;padding:0;">‹</button>
+        <div style="font-size:18px;font-weight:700;">ユーザー名</div>
+      </div>
+      <div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:12px;">
+        <div style="padding:14px;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">新しいユーザー名</div>
+          <input id="newUsername" type="text" placeholder="ユーザー名" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
+        </div>
+      </div>
+      <div id="usernameError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
+      <div id="usernameSuccess" style="color:#00a651;font-size:13px;margin-bottom:10px;display:none;"></div>
+      <button id="changeUsernameBtn" style="width:100%;padding:13px;background:#e8380d;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">変更する</button>
+    </div>
+
+    <!-- メールアドレス変更 -->
+    <div id="authViewEmail" style="display:none;">
+      <div style="display:flex;align-items:center;margin-bottom:20px;">
+        <button id="backFromEmailBtn" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;margin-right:8px;padding:0;">‹</button>
+        <div style="font-size:18px;font-weight:700;">メールアドレス</div>
+      </div>
+      <div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:12px;">
+        <div style="padding:14px;border-bottom:1px solid #e0e0e0;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">新しいメールアドレス</div>
+          <input id="newEmail" type="email" placeholder="新しいメールアドレス" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
+        </div>
+        <div style="padding:14px;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">現在のパスワード（確認用）</div>
+          <input id="emailChangePassword" type="password" placeholder="パスワード" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
+        </div>
+      </div>
+      <div id="emailError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
+      <div id="emailSuccess" style="color:#00a651;font-size:13px;margin-bottom:10px;display:none;"></div>
+      <button id="changeEmailBtn" style="width:100%;padding:13px;background:#e8380d;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">変更する</button>
+    </div>
+
+    <!-- パスワード変更 -->
+    <div id="authViewPassword" style="display:none;">
+      <div style="display:flex;align-items:center;margin-bottom:20px;">
+        <button id="backFromPasswordBtn" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;margin-right:8px;padding:0;">‹</button>
+        <div style="font-size:18px;font-weight:700;">パスワード</div>
       </div>
       <div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:12px;">
         <div style="padding:14px;border-bottom:1px solid #e0e0e0;">
           <div style="font-size:12px;color:#aaa;margin-bottom:4px;">現在のパスワード</div>
           <input id="currentPassword" type="password" placeholder="現在のパスワード" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
         </div>
-        <div style="padding:14px;border-bottom:1px solid #e0e0e0;">
+        <div style="padding:14px;">
           <div style="font-size:12px;color:#aaa;margin-bottom:4px;">新しいパスワード（8文字以上）</div>
           <input id="newPassword" type="password" placeholder="8文字以上" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
         </div>
-        <button id="changePasswordBtn" style="width:100%;padding:12px;background:none;border:none;font-size:14px;color:#e8380d;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;font-weight:700;">パスワードを変更する</button>
       </div>
       <div id="pwError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
-      <div id="pwSuccess" style="color:#00a651;font-size:13px;margin-bottom:10px;display:none;">パスワードを変更しました</div>
-      <!-- ユーザー名変更 -->
-      <div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:12px;">
-        <div style="padding:14px;border-bottom:1px solid #e0e0e0;">
-          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">新しいユーザー名</div>
-          <input id="newUsername" type="text" placeholder="ユーザー名" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
-        </div>
-        <button id="changeUsernameBtn" style="width:100%;padding:12px;background:none;border:none;font-size:14px;color:#e8380d;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;font-weight:700;">ユーザー名を変更する</button>
-      </div>
-      <!-- メールアドレス変更 -->
-      <div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:12px;">
-        <div style="padding:14px;border-bottom:1px solid #e0e0e0;">
-          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">新しいメールアドレス</div>
-          <input id="newEmail" type="email" placeholder="新しいメールアドレス" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
-        </div>
-        <div style="padding:14px;border-bottom:1px solid #e0e0e0;">
-          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">現在のパスワード（確認用）</div>
-          <input id="emailChangePassword" type="password" placeholder="パスワード" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
-        </div>
-        <button id="changeEmailBtn" style="width:100%;padding:12px;background:none;border:none;font-size:14px;color:#e8380d;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;font-weight:700;">メールアドレスを変更する</button>
-      </div>
-      <div id="acctError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
-      <div id="acctSuccess" style="color:#00a651;font-size:13px;margin-bottom:10px;display:none;"></div>
-      <button id="logoutBtn" style="width:100%;padding:13px;background:#f5f5f5;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">ログアウト</button>
-      <button id="deleteAccountBtn" style="width:100%;padding:13px;background:none;color:#e8380d;border:1px solid #e8380d;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">アカウントを削除する</button>
-      <button id="acctCloseBtn" style="width:100%;padding:10px;background:none;color:#aaa;border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">閉じる</button>
+      <div id="pwSuccess" style="color:#00a651;font-size:13px;margin-bottom:10px;display:none;"></div>
+      <button id="changePasswordBtn" style="width:100%;padding:13px;background:#e8380d;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">変更する</button>
     </div>
+
+    <div id="acctError" style="display:none;"></div>
+    <div id="acctSuccess" style="display:none;"></div>
   </div>
 </div>
 <button class="fs-save-fixed" id="fsSave">保存</button>
@@ -1558,9 +1602,11 @@ let currentUser = null;
 function showAuthModal(view) {
   document.getElementById('authModal').classList.add('open');
   ['authViewLogin','authViewRegister','authViewAccount','authViewUsername','authViewEmail','authViewPassword'].forEach(id => {
-    document.getElementById(id).style.display = 'none';
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
   });
-  const el = document.getElementById('authView' + view.charAt(0).toUpperCase() + view.slice(1));
+  const viewId = 'authView' + view.charAt(0).toUpperCase() + view.slice(1);
+  const el = document.getElementById(viewId);
   if (el) el.style.display = 'block';
 }
 
