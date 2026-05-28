@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="manifest" href="manifest.json">
 <script>
@@ -18,7 +18,10 @@ window.addEventListener('load', () => {
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="ねこ棚">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
 <title>ねこ棚</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -101,13 +104,13 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 28px;
-    height: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px));
+    bottom: 0;
+    height: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 12px);
     background: #ffffff;
     border-top: 1px solid var(--border);
     display: flex;
     z-index: 200;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
     align-items: flex-start;
   }
 
@@ -174,6 +177,8 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 
   /* Total bar - just above tab bar */
   .total-bar {
+    backdrop-filter: blur(12px);
+    background: rgba(255,255,255,0.92) !important;
     position: fixed;
     bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 28px);
     left: 0;
@@ -221,6 +226,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     animation: fadeIn 0.25s ease;
   }
   .card.swiped { transform: translateX(-90px); }
+  .card:active { opacity: 0.85; }
   @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
   .card-inner { display: flex; align-items: flex-start; min-height: 90px; width: 100%; }
   .card-thumb {
@@ -267,6 +273,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     justify-content: center; padding: 8px 8px 8px 0; flex-shrink: 0;
   }
   .btn-check {
+    transition: background 0.15s, border-color 0.15s;
     width: 30px; height: 30px; border-radius: 50%;
     border: 2px solid var(--border); background: transparent;
     color: var(--text2); font-size: 14px; cursor: pointer;
@@ -352,7 +359,8 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   }
 
   /* Empty */
-  .empty { text-align: center; padding: 60px 20px; color: var(--text3); }
+  .empty { text-align: center; padding: 60px 20px; color: var(--text3); animation: fadeIn 0.4s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
   .empty-icon { font-size: 48px; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; }
 
   /* Filter drawer */
@@ -361,6 +369,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     background: #fff; z-index: 400;
     box-shadow: -4px 0 20px rgba(0,0,0,0.15);
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .drawer.open { display: block; }
   .overlay {
@@ -378,7 +387,9 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     display: none; position: fixed; inset: 0;
     background: #ffffff; z-index: 600;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     animation: slideInUp 0.3s ease;
+    will-change: transform;
     padding-bottom: 100px;
   }
   .fullscreen-modal.open { display: block; }
@@ -1888,10 +1899,14 @@ setTimeout(() => {
 
 // save時にFirestoreにも保存
 const _origSave = save;
+let _saveTimer = null;
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   if (currentUser && window._fb) {
-    window._fb.saveToFirestore(currentUser.uid, items, categories);
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => {
+      window._fb.saveToFirestore(currentUser.uid, items, categories);
+    }, 800);
   }
 }
 
