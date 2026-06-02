@@ -1910,6 +1910,23 @@ function save() {
   }
 }
 
+
+// ===== Share from Safari (iOS Shortcut) =====
+window.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const sharedUrl = params.get('url');
+  const sharedName = params.get('name');
+  if (sharedUrl || sharedName) {
+    setTimeout(() => {
+      openFsModal();
+      if (sharedUrl) document.getElementById('inputUrl').value = decodeURIComponent(sharedUrl);
+      if (sharedName) document.getElementById('inputName').value = decodeURIComponent(sharedName);
+      // URLパラメータをクリア（履歴に残さない）
+      window.history.replaceState({}, '', window.location.pathname);
+    }, 500);
+  }
+});
+
 // Init
 render();
 </script>
