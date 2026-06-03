@@ -177,13 +177,11 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 
   /* Total bar - just above tab bar */
   .total-bar {
-    backdrop-filter: blur(12px);
-    background: rgba(255,255,255,0.92) !important;
     position: fixed;
-    bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 28px);
+    bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 12px);
     left: 0;
     right: 0;
-    background: rgba(255,255,255,0.98);
+    background: #ffffff;
     border-top: 1px solid var(--border);
     padding: 0 20px;
     display: flex;
@@ -1231,12 +1229,21 @@ document.getElementById('fsCatHeader').addEventListener('click', () => {
 });
 
 // URL input
-document.getElementById('inputUrl').addEventListener('input', updateUrlRow);
+let _urlFetchTimer = null;
+document.getElementById('inputUrl').addEventListener('input', () => {
+  updateUrlRow();
+  clearTimeout(_urlFetchTimer);
+  const url = document.getElementById('inputUrl').value.trim();
+  if (/^https?:\/\/.+\..+/.test(url)) {
+    _urlFetchTimer = setTimeout(() => fetchProductInfo(false), 600);
+  }
+});
 document.getElementById('pasteUrlBtn').addEventListener('click', async () => {
   try {
     const text = await navigator.clipboard.readText();
     document.getElementById('inputUrl').value = text;
     updateUrlRow();
+    fetchProductInfo(false);
   } catch { alert('クリップボードへのアクセスが許可されていません'); }
 });
 document.getElementById('openUrlBtn').addEventListener('click', () => {
@@ -1245,22 +1252,20 @@ document.getElementById('openUrlBtn').addEventListener('click', () => {
 });
 
 // サイトから商品情報を自動取得（OGPパース）
-document.getElementById('fetchInfoBtn').addEventListener('click', async () => {
+async function fetchProductInfo(showAlert) {
   const url = document.getElementById('inputUrl').value.trim();
-  if (!url) return;
+  if (!url || !/^https?:\/\//.test(url)) return;
   const btn = document.getElementById('fetchInfoBtn');
   const originalText = btn.textContent;
   btn.textContent = '取得中...';
   btn.disabled = true;
   try {
-    // CORSプロキシ経由でHTMLを取得
     const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
     const res = await fetch(proxyUrl);
     const data = await res.json();
     const html = data.contents;
     const doc = new DOMParser().parseFromString(html, 'text/html');
 
-    // OGP・metaから情報抽出
     const getMeta = (props) => {
       for (const p of props) {
         const el = doc.querySelector(`meta[property="${p}"], meta[name="${p}"]`);
@@ -1271,10 +1276,8 @@ document.getElementById('fetchInfoBtn').addEventListener('click', async () => {
 
     const ogTitle = getMeta(['og:title', 'twitter:title']) || (doc.querySelector('title') ? doc.querySelector('title').textContent : '');
     const ogImage = getMeta(['og:image', 'twitter:image', 'twitter:image:src']);
-    // 価格はメタや構造化データから探す
     let price = getMeta(['product:price:amount', 'og:price:amount']);
     if (!price) {
-      // JSON-LDから価格を探す
       const ldScripts = doc.querySelectorAll('script[type="application/ld+json"]');
       for (const s of ldScripts) {
         try {
@@ -1295,7 +1298,6 @@ document.getElementById('fetchInfoBtn').addEventListener('click', async () => {
       }
     }
 
-    // フォームに反映
     if (ogTitle && !document.getElementById('inputName').value.trim()) {
       document.getElementById('inputName').value = ogTitle.trim();
     }
@@ -1308,16 +1310,39 @@ document.getElementById('fetchInfoBtn').addEventListener('click', async () => {
       updateImagePreview();
     }
 
-    if (!ogTitle && !ogImage && !price) {
+    // カテゴリー自動判定（タイトル・URLからキーワードマッチ）
+    if (!selectedCategory && ogTitle) {
+      const text = (ogTitle + ' ' + url).toLowerCase();
+      const rules = [
+        { kw: ['服','ファッション','シャツ','パンツ','ジャケット','コート','スニーカー','靴','バッグ','財布','fashion','wear','apparel'], cat: 'ファッション' },
+        { kw: ['食','料理','お菓子','スイーツ','ドリンク','コーヒー','茶','food','snack','drink'], cat: '食べ物' },
+        { kw: ['本','書籍','マンガ','漫画','コミック','book','manga','comic'], cat: '本・マンガ' },
+        { kw: ['ゲーム','game','switch','playstation','ps5','xbox','nintendo'], cat: 'ゲーム' },
+        { kw: ['美容','化粧','コスメ','スキンケア','健康','サプリ','beauty','cosme','health'], cat: '美容・健康' },
+        { kw: ['家具','インテリア','収納','照明','キッチン','寝具','home','interior','furniture'], cat: 'ホーム・インテリア' },
+        { kw: ['pc','スマホ','iphone','android','カメラ','ガジェット','イヤホン','ヘッドホン','充電','gadget','phone','laptop'], cat: 'ガジェット' },
+      ];
+      for (const r of rules) {
+        if (r.kw.some(k => text.includes(k))) {
+          const match = categories.find(c => c.name.includes(r.cat));
+          if (match) { selectedCategory = match.name; document.getElementById('fsCatSelected').textContent = match.name; renderCatOptions(); }
+          break;
+        }
+      }
+    }
+
+    if (showAlert && !ogTitle && !ogImage && !price) {
       alert('情報を取得できませんでした。手動で入力してください。');
     }
   } catch(e) {
-    alert('情報の取得に失敗しました。サイトによっては取得できない場合があります。');
+    if (showAlert) alert('情報の取得に失敗しました。サイトによっては取得できない場合があります。');
   } finally {
     btn.textContent = originalText;
     btn.disabled = false;
   }
-});
+}
+
+document.getElementById('fetchInfoBtn').addEventListener('click', () => fetchProductInfo(true));
 
 // Image
 document.getElementById('inputImage').addEventListener('change', e => {
@@ -2012,6 +2037,8 @@ window.addEventListener('DOMContentLoaded', () => {
       openFsModal();
       if (sharedUrl) document.getElementById('inputUrl').value = decodeURIComponent(sharedUrl);
       if (sharedName) document.getElementById('inputName').value = decodeURIComponent(sharedName);
+      updateUrlRow();
+      if (sharedUrl) setTimeout(() => fetchProductInfo(false), 300);
       // URLパラメータをクリア（履歴に残さない）
       window.history.replaceState({}, '', window.location.pathname);
     }, 500);
