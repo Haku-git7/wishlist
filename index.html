@@ -202,6 +202,14 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 
   /* Card */
   .card-wrap { position: relative; overflow: hidden; border-radius: var(--radius); display: block; isolation: isolate; contain: content; margin-bottom: 8px; }
+  .card-wrap, .card-wrap *, .card, .card * {
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+    -webkit-touch-callout: none !important;
+    -webkit-tap-highlight-color: transparent;
+  }
   .card-delete-bg {
     position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
     width: 52px; height: 52px;
@@ -481,9 +489,10 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   .fs-row:last-child { border-bottom: none; }
   .fs-row-icon { font-size: 18px; width: 24px; text-align: center; color: var(--text3); flex-shrink: 0; }
   .fs-row-input {
+    -webkit-user-select: text; user-select: text;
     flex: 1; min-width: 0; border: none; outline: none; background: transparent;
     font-family: 'Zen Kaku Gothic New', sans-serif;
-    font-size: 15px; color: var(--text);
+    font-size: 16px; color: var(--text);
   }
   .fs-row-input::placeholder { color: var(--text3); }
   .fs-row-input textarea {
@@ -1124,6 +1133,7 @@ function setupCardEvents(container) {
           }
           wrap.style.opacity = '0.6';
           wrap.style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)';
+          if (window.getSelection) { try { window.getSelection().removeAllRanges(); } catch(e){} }
           triggerHaptic();
         }, 450);
         if (isBoughtList) boughtLongTimer = timer; else wishLongTimer = timer;
