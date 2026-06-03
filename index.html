@@ -141,7 +141,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   }
   .tab-item-icon {
     font-size: 22px;
-    transition: transform 0.2s;
+    transition: transform 0.2s ease, color 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -203,7 +203,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   .list { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; padding-bottom: 220px; }
 
   /* Card */
-  .card-wrap { position: relative; overflow: hidden; border-radius: var(--radius); display: block; isolation: isolate; }
+  .card-wrap { position: relative; overflow: hidden; border-radius: var(--radius); display: block; isolation: isolate; contain: content; margin-bottom: 8px; }
   .card-delete-bg {
     position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
     width: 52px; height: 52px;
@@ -228,7 +228,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   .card.swiped { transform: translateX(-90px); }
   .card:active { opacity: 0.85; }
   @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
-  .card-inner { display: flex; align-items: flex-start; min-height: 90px; width: 100%; }
+  .card-inner { display: flex; align-items: stretch; height: 90px; width: 100%; }
   .card-thumb {
     width: 90px;
     min-width: 90px;
@@ -250,17 +250,26 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   }
   .card-body {
     flex: 1; min-width: 0; padding: 8px 10px;
-    display: flex; flex-direction: row; justify-content: space-between; align-items: stretch;
-    min-height: 90px;
+    display: flex; flex-direction: row; justify-content: space-between; align-items: center;
+    height: 90px; box-sizing: border-box; overflow: hidden;
   }
   .card-left {
-    flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; justify-content: center;
+    flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; justify-content: center;
+    overflow: hidden;
   }
   .card-right-col {
     display: flex; flex-direction: column; align-items: flex-end;
     justify-content: space-between; padding-left: 8px; flex-shrink: 0;
   }
-  .card-name { font-size: 14px; font-weight: 500; line-height: 1.4; color: #111; word-break: break-all; }
+  .card-name {
+    font-size: 14px; font-weight: 500; line-height: 1.3; color: #111;
+    word-break: break-word; overflow-wrap: anywhere;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+    max-height: 2.6em;
+  }
+  .card-name.long { font-size: 12.5px; max-height: 2.6em; }
+  .card-name.vlong { font-size: 11.5px; max-height: 2.6em; }
   .card-category { font-size: 11px; color: var(--text2); margin-top: 3px; }
   .card-price { font-size: 14px; color: var(--accent); font-weight: 700; white-space: nowrap; }
   .card-memo { font-size: 11px; color: var(--text2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -759,6 +768,10 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
       <input class="fs-row-input" id="inputUrl" placeholder="URL" type="url" />
       <button class="fs-paste-btn" id="pasteUrlBtn">貼付</button>
     </div>
+    <div class="fs-row" id="fetchInfoRow" style="display:none">
+      <span class="fs-row-icon"></span>
+      <button class="fs-open-url-btn" id="fetchInfoBtn" style="background:#fff3f0;color:var(--accent);">🪄 サイトから情報を取得</button>
+    </div>
     <div class="fs-row" id="openUrlRow" style="display:none">
       <span class="fs-row-icon"></span>
       <button class="fs-open-url-btn" id="openUrlBtn">商品サイトを開く</button>
@@ -1169,6 +1182,7 @@ function openFsModal(item = null) {
   document.getElementById('inputImage').value = '';
   document.getElementById('fsModal').classList.add('open');
   document.getElementById('fsSave').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
 }
 
 function updateUrlRow() {
@@ -1230,6 +1244,81 @@ document.getElementById('openUrlBtn').addEventListener('click', () => {
   if (url) window.open(url, '_blank');
 });
 
+// サイトから商品情報を自動取得（OGPパース）
+document.getElementById('fetchInfoBtn').addEventListener('click', async () => {
+  const url = document.getElementById('inputUrl').value.trim();
+  if (!url) return;
+  const btn = document.getElementById('fetchInfoBtn');
+  const originalText = btn.textContent;
+  btn.textContent = '取得中...';
+  btn.disabled = true;
+  try {
+    // CORSプロキシ経由でHTMLを取得
+    const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
+    const res = await fetch(proxyUrl);
+    const data = await res.json();
+    const html = data.contents;
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+
+    // OGP・metaから情報抽出
+    const getMeta = (props) => {
+      for (const p of props) {
+        const el = doc.querySelector(`meta[property="${p}"], meta[name="${p}"]`);
+        if (el && el.content) return el.content;
+      }
+      return '';
+    };
+
+    const ogTitle = getMeta(['og:title', 'twitter:title']) || (doc.querySelector('title') ? doc.querySelector('title').textContent : '');
+    const ogImage = getMeta(['og:image', 'twitter:image', 'twitter:image:src']);
+    // 価格はメタや構造化データから探す
+    let price = getMeta(['product:price:amount', 'og:price:amount']);
+    if (!price) {
+      // JSON-LDから価格を探す
+      const ldScripts = doc.querySelectorAll('script[type="application/ld+json"]');
+      for (const s of ldScripts) {
+        try {
+          const json = JSON.parse(s.textContent);
+          const findPrice = (obj) => {
+            if (!obj || typeof obj !== 'object') return null;
+            if (obj.offers) {
+              const o = Array.isArray(obj.offers) ? obj.offers[0] : obj.offers;
+              if (o && o.price) return o.price;
+            }
+            if (obj.price) return obj.price;
+            for (const k in obj) { const r = findPrice(obj[k]); if (r) return r; }
+            return null;
+          };
+          const p = findPrice(json);
+          if (p) { price = p; break; }
+        } catch {}
+      }
+    }
+
+    // フォームに反映
+    if (ogTitle && !document.getElementById('inputName').value.trim()) {
+      document.getElementById('inputName').value = ogTitle.trim();
+    }
+    if (price && !document.getElementById('inputPrice').value.trim()) {
+      const num = String(price).replace(/[^0-9]/g, '');
+      if (num) document.getElementById('inputPrice').value = num;
+    }
+    if (ogImage && !selectedImageData) {
+      selectedImageData = ogImage;
+      updateImagePreview();
+    }
+
+    if (!ogTitle && !ogImage && !price) {
+      alert('情報を取得できませんでした。手動で入力してください。');
+    }
+  } catch(e) {
+    alert('情報の取得に失敗しました。サイトによっては取得できない場合があります。');
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+});
+
 // Image
 document.getElementById('inputImage').addEventListener('change', e => {
   const file = e.target.files[0];
@@ -1246,6 +1335,7 @@ document.getElementById('fsPreviewImg').addEventListener('click', () => {
 document.getElementById('fsClose').addEventListener('click', () => {
   document.getElementById('fsModal').classList.remove('open');
   document.getElementById('fsSave').style.display = 'none';
+  document.body.style.overflow = '';
 });
 
 // Save
@@ -1266,6 +1356,7 @@ document.getElementById('fsSave').addEventListener('click', () => {
   document.getElementById('inputImage').value = '';
   selectedImageData = '';
   editingId = null;
+  document.body.style.overflow = '';
 });
 
 document.getElementById('fabBtn').addEventListener('click', () => openFsModal());
