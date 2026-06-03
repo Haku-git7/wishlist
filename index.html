@@ -583,6 +583,11 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 </head>
 <body>
 
+<!-- iOS用ハプティック（振動）トリガー -->
+<label id="hapticLabel" aria-hidden="true" style="position:absolute;left:-9999px;width:0;height:0;overflow:hidden;">
+  <input type="checkbox" id="hapticSwitch" switch />
+</label>
+
 <!-- 欲しいもの用ヘッダー -->
 <div class="header" id="header-wish">
   <div class="header-title">ねこ<span>棚</span></div>
@@ -1119,7 +1124,7 @@ function setupCardEvents(container) {
           }
           wrap.style.opacity = '0.6';
           wrap.style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)';
-          if (navigator.vibrate) navigator.vibrate(30);
+          triggerHaptic();
         }, 450);
         if (isBoughtList) boughtLongTimer = timer; else wishLongTimer = timer;
       }
@@ -1697,6 +1702,16 @@ function updateBulkBar() {
 // ===== Wish list drag sort =====
 let wishSortMode = localStorage.getItem('wishSortMode') || 'custom';
 let boughtSortMode = localStorage.getItem('boughtSortMode') || 'custom';
+
+function triggerHaptic() {
+  // Android等：Vibration API
+  try { if (navigator.vibrate) navigator.vibrate(20); } catch(e) {}
+  // iOS 17.4+：switch要素のトグルでハプティックを発火
+  try {
+    const sw = document.getElementById('hapticSwitch');
+    if (sw) { sw.checked = !sw.checked; }
+  } catch(e) {}
+}
 
 function sortItems(arr, mode) {
   const a = [...arr];
