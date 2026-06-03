@@ -1363,28 +1363,68 @@ async function fetchProductInfo(showAlert) {
       return '';
     };
 
-    const ogTitle = getMeta(['og:title', 'twitter:title']) || (doc.querySelector('title') ? doc.querySelector('title').textContent : '');
-    const ogImage = getMeta(['og:image', 'twitter:image', 'twitter:image:src']);
-    let price = getMeta(['product:price:amount', 'og:price:amount']);
-    if (!price) {
-      const ldScripts = doc.querySelectorAll('script[type="application/ld+json"]');
-      for (const s of ldScripts) {
-        try {
-          const json = JSON.parse(s.textContent);
-          const findPrice = (obj) => {
-            if (!obj || typeof obj !== 'object') return null;
-            if (obj.offers) {
-              const o = Array.isArray(obj.offers) ? obj.offers[0] : obj.offers;
-              if (o && o.price) return o.price;
+    // --- JSON-LD（構造化データ）からProduct情報を抽出（最も信頼性が高い）---
+    let ld = { name: '', price: '', image: '' };
+    const ldScripts = doc.querySelectorAll('script[type="application/ld+json"]');
+    for (const s of ldScripts) {
+      try {
+        const json = JSON.parse(s.textContent);
+        const candidates = [];
+        const collect = (o) => {
+          if (!o || typeof o !== 'object') return;
+          if (Array.isArray(o)) { o.forEach(collect); return; }
+          candidates.push(o);
+          if (o['@graph']) collect(o['@graph']);
+        };
+        collect(json);
+        for (const c of candidates) {
+          const type = c['@type'];
+          const isProduct = type === 'Product' || (Array.isArray(type) && type.includes('Product'));
+          if (!isProduct) continue;
+          if (!ld.name && c.name) ld.name = String(c.name);
+          if (!ld.image && c.image) {
+            ld.image = Array.isArray(c.image) ? c.image[0] : (typeof c.image === 'object' ? (c.image.url || '') : c.image);
+          }
+          if (!ld.price && c.offers) {
+            const o = Array.isArray(c.offers) ? c.offers[0] : c.offers;
+            if (o) {
+              if (o.price) ld.price = o.price;
+              else if (o.lowPrice) ld.price = o.lowPrice;
+              else if (o.priceSpecification) {
+                const ps = Array.isArray(o.priceSpecification) ? o.priceSpecification[0] : o.priceSpecification;
+                if (ps && ps.price) ld.price = ps.price;
+              }
             }
-            if (obj.price) return obj.price;
-            for (const k in obj) { const r = findPrice(obj[k]); if (r) return r; }
-            return null;
-          };
-          const p = findPrice(json);
-          if (p) { price = p; break; }
-        } catch {}
+          }
+        }
+      } catch {}
+    }
+
+    // --- タイトルのクリーンアップ（サイト名サフィックスを除去）---
+    const cleanTitle = (t) => {
+      if (!t) return '';
+      let s = t.trim().replace(/\s+/g, ' ');
+      const seps = ['｜', '|', ' - ', ' – ', ' — ', '【'];
+      for (const sep of seps) {
+        if (s.includes(sep)) {
+          const parts = s.split(sep).map(p => p.trim()).filter(Boolean);
+          if (parts.length > 1) { s = parts[0]; break; }
+        }
       }
+      return s.trim();
+    };
+
+    const rawTitle = getMeta(['og:title', 'twitter:title']) || (doc.querySelector('title') ? doc.querySelector('title').textContent : '');
+    const ogTitle = ld.name || cleanTitle(rawTitle);
+    const ogImage = getMeta(['og:image', 'twitter:image', 'twitter:image:src', 'og:image:url']) || ld.image;
+
+    // --- 価格抽出：JSON-LD → メタタグ → 本文の¥パターン ---
+    let price = ld.price || getMeta(['product:price:amount', 'og:price:amount', 'product:price']);
+    if (!price) {
+      // 本文から「¥19,800」「19,800円」などを探す
+      const bodyText = doc.body ? doc.body.textContent : '';
+      const m = bodyText.match(/[¥￥]\s?([0-9][0-9,]{2,})|([0-9][0-9,]{2,})\s?円/);
+      if (m) price = (m[1] || m[2] || '').replace(/,/g, '');
     }
 
     if (ogTitle && !document.getElementById('inputName').value.trim()) {
@@ -1403,7 +1443,7 @@ async function fetchProductInfo(showAlert) {
     if (!selectedCategory && ogTitle) {
       const text = (ogTitle + ' ' + url).toLowerCase();
       const rules = [
-        { kw: ['服','ファッション','シャツ','パンツ','ジャケット','コート','スニーカー','靴','バッグ','財布','fashion','wear','apparel'], cat: 'ファッション' },
+        { kw: ['服','ファッション','シャツ','パンツ','ジャケット','コート','スニーカー','靴','シューズ','ブーツ','サンダル','バッグ','財布','fashion','wear','apparel','shoe','sneaker','running','hoka','nike','adidas','newbalance'], cat: 'ファッション' },
         { kw: ['食','料理','お菓子','スイーツ','ドリンク','コーヒー','茶','food','snack','drink'], cat: '食べ物' },
         { kw: ['本','書籍','マンガ','漫画','コミック','book','manga','comic'], cat: '本・マンガ' },
         { kw: ['ゲーム','game','switch','playstation','ps5','xbox','nintendo'], cat: 'ゲーム' },
@@ -1784,6 +1824,7 @@ document.addEventListener('touchmove', e => {
       items.splice(gFrom, 1);
       items.splice(gTo, 0, movedItem);
       boughtDragIdx = i;
+      triggerHaptic();
       save(); renderBought();
       boughtDragEl = list.querySelectorAll('.card-wrap')[boughtDragIdx];
       if (boughtDragEl) {
