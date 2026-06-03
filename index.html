@@ -201,7 +201,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   .list { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; padding-bottom: 220px; }
 
   /* Card */
-  .card-wrap { position: relative; overflow: hidden; border-radius: var(--radius); display: block; isolation: isolate; contain: content; margin-bottom: 8px; }
+  .card-wrap { position: relative; overflow: hidden; border-radius: var(--radius); display: block; isolation: isolate; contain: content; }
   .card-wrap, .card-wrap *, .card, .card * {
     -webkit-user-select: none !important;
     -moz-user-select: none !important;
@@ -593,8 +593,8 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 <body>
 
 <!-- iOS用ハプティック（振動）トリガー -->
-<label id="hapticLabel" aria-hidden="true" style="position:absolute;left:-9999px;width:0;height:0;overflow:hidden;">
-  <input type="checkbox" id="hapticSwitch" switch />
+<label id="hapticLabel" aria-hidden="true" style="position:absolute;top:-100px;left:0;opacity:0;pointer-events:none;z-index:-1;">
+  <input type="checkbox" id="hapticSwitch" switch style="width:40px;height:24px;" />
 </label>
 
 <!-- 欲しいもの用ヘッダー -->
