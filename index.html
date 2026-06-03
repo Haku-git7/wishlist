@@ -1187,6 +1187,8 @@ function updateUrlRow() {
   const url = document.getElementById('inputUrl').value.trim();
   const row = document.getElementById('openUrlRow');
   row.style.display = url ? 'flex' : 'none';
+  const fetchRow = document.getElementById('fetchInfoRow');
+  if (fetchRow) fetchRow.style.display = url ? 'flex' : 'none';
 }
 
 function updateCatDisplay() {
@@ -1260,10 +1262,29 @@ async function fetchProductInfo(showAlert) {
   btn.textContent = '取得中...';
   btn.disabled = true;
   try {
-    const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
-    const res = await fetch(proxyUrl);
-    const data = await res.json();
-    const html = data.contents;
+    // 複数のCORSプロキシを順に試す
+    let html = null;
+    const proxies = [
+      u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+      u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
+      u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u),
+    ];
+    for (const makeUrl of proxies) {
+      try {
+        const res = await fetch(makeUrl(url));
+        if (!res.ok) continue;
+        const text = await res.text();
+        // allorigins/get形式(JSON)の場合のフォールバック
+        if (text.trim().startsWith('{') && text.includes('"contents"')) {
+          try { html = JSON.parse(text).contents; } catch { html = text; }
+        } else {
+          html = text;
+        }
+        if (html && html.length > 100) break;
+      } catch(err) { continue; }
+    }
+    if (!html) throw new Error('all proxies failed');
+
     const doc = new DOMParser().parseFromString(html, 'text/html');
 
     const getMeta = (props) => {
