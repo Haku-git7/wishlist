@@ -365,6 +365,10 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     display: flex !important;
   }
 
+  .sort-opt:active { background: #f5f5f5; }
+  #sortSheet { transform: translateY(100%); }
+  #sortSheet.show { transform: translateY(0); }
+
   /* Empty */
   .empty { text-align: center; padding: 60px 20px; color: var(--text3); animation: fadeIn 0.4s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -584,6 +588,11 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   <div class="header-title">ねこ<span>棚</span></div>
   <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
     <div class="header-stats" id="statsText" style="white-space:nowrap;">0件</div>
+    <button class="filter-icon-btn" id="sortBtn" title="並び替え">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="15" y2="12"/><line x1="4" y1="17" x2="10" y2="17"/>
+      </svg>
+    </button>
     <button class="filter-icon-btn" id="filterBtn" title="絞り込み">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
@@ -598,6 +607,11 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   <div class="header-title">ねこ<span>棚</span></div>
   <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
     <div class="header-stats" id="statsText2" style="white-space:nowrap;">0件</div>
+    <button class="filter-icon-btn" id="sortBtn2" title="並び替え">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="15" y2="12"/><line x1="4" y1="17" x2="10" y2="17"/>
+      </svg>
+    </button>
     <button class="filter-icon-btn" id="filterBtn2" title="絞り込み">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
@@ -709,6 +723,19 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
       <button class="add-cat-btn" id="addCatBtn">追加</button>
     </div>
   </div>
+</div>
+
+
+<!-- ソートメニュー -->
+<div id="sortOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:450;"></div>
+<div id="sortSheet" style="display:none;position:fixed;left:0;right:0;bottom:0;background:#fff;border-radius:16px 16px 0 0;z-index:451;padding:8px 0 calc(env(safe-area-inset-bottom,0px) + 16px);box-shadow:0 -4px 20px rgba(0,0,0,0.15);transition:transform 0.25s ease;">
+  <div style="text-align:center;padding:12px;font-weight:700;font-size:15px;border-bottom:1px solid #f0f0f0;">並び替え</div>
+  <div class="sort-opt" data-sort="custom" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f5f5f5;"><span>カスタム（長押しで並び替え）</span><span class="sort-check" style="color:#e8380d;display:none;">✓</span></div>
+  <div class="sort-opt" data-sort="newest" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f5f5f5;"><span>追加が新しい順</span><span class="sort-check" style="color:#e8380d;display:none;">✓</span></div>
+  <div class="sort-opt" data-sort="oldest" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f5f5f5;"><span>追加が古い順</span><span class="sort-check" style="color:#e8380d;display:none;">✓</span></div>
+  <div class="sort-opt" data-sort="priceHigh" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f5f5f5;"><span>金額が高い順</span><span class="sort-check" style="color:#e8380d;display:none;">✓</span></div>
+  <div class="sort-opt" data-sort="priceLow" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f5f5f5;"><span>金額が安い順</span><span class="sort-check" style="color:#e8380d;display:none;">✓</span></div>
+  <div class="sort-opt" data-sort="name" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;"><span>名前順</span><span class="sort-check" style="color:#e8380d;display:none;">✓</span></div>
 </div>
 
 <!-- Tab bar -->
@@ -944,7 +971,6 @@ let selectedCategory = null; // null = なし
 let catOpen = false;
 let selectedCategories = new Set();
 
-function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); }
 function saveCats() { localStorage.setItem(CAT_KEY, JSON.stringify(categories)); }
 function getEmoji(name) { return name ? name.slice(0,2) : '📦'; }
 
@@ -977,6 +1003,7 @@ function render() {
   const list = document.getElementById('list');
   let filtered = items.filter(i => !i.bought);
   if (selectedCategories.size > 0) filtered = filtered.filter(i => selectedCategories.has(i.category));
+  filtered = sortItems(filtered, wishSortMode);
   list.innerHTML = filtered.length === 0
     ? `<div class="empty"><div class="empty-icon"><svg width="56" height="56" viewBox="0 0 24 24" fill="#ddd" stroke="#ccc" stroke-width="1.5"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div><div>まだ何もありません</div></div>`
     : filtered.map(item => cardHTML(item)).join('');
@@ -1002,6 +1029,7 @@ function renderBought() {
   const list = document.getElementById('boughtList');
   let filtered = items.filter(i => i.bought);
   if (boughtSelectedCategories.size > 0) filtered = filtered.filter(i => boughtSelectedCategories.has(i.category));
+  filtered = sortItems(filtered, boughtSortMode);
   list.innerHTML = filtered.length === 0
     ? `<div class="empty"><div class="empty-icon"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div>まだ何もありません</div></div>`
     : filtered.map(item => cardHTML(item)).join('');
@@ -1064,11 +1092,46 @@ function setupCardEvents(container) {
   container.querySelectorAll('.btn-check').forEach(btn => {
     btn.addEventListener('click', e => { e.stopPropagation(); toggleBought(btn.dataset.id); });
   });
+  const isBoughtList = container.id === 'boughtList';
   container.querySelectorAll('.card').forEach(card => {
-    let startX = 0;
-    card.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, {passive:true});
+    let startX = 0, startY = 0, moved = false;
+    card.addEventListener('touchstart', e => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      moved = false;
+      // 長押しドラッグ開始（カスタム順かつ編集モードでない時）
+      const sortMode = isBoughtList ? boughtSortMode : wishSortMode;
+      const editMode = isBoughtList ? boughtEditMode : listEditMode;
+      if (sortMode === 'custom' && !editMode) {
+        const timer = setTimeout(() => {
+          if (moved) return;
+          const wrap = card.closest('.card-wrap');
+          if (isBoughtList) {
+            boughtIsDragging = true;
+            boughtDragEl = wrap;
+            const bItems = sortItems(items.filter(it=>it.bought).filter(it => boughtSelectedCategories.size===0 || boughtSelectedCategories.has(it.category)), 'custom');
+            boughtDragIdx = bItems.findIndex(it => it.id === card.dataset.id);
+          } else {
+            wishIsDragging = true;
+            wishDragEl = wrap;
+            const wItems = sortItems(items.filter(it=>!it.bought).filter(it => selectedCategories.size===0 || selectedCategories.has(it.category)), 'custom');
+            wishDragIdx = wItems.findIndex(it => it.id === card.dataset.id);
+          }
+          wrap.style.opacity = '0.6';
+          wrap.style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)';
+          if (navigator.vibrate) navigator.vibrate(30);
+        }, 450);
+        if (isBoughtList) boughtLongTimer = timer; else wishLongTimer = timer;
+      }
+    }, {passive:true});
     card.addEventListener('touchmove', e => {
       const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+        moved = true;
+        clearTimeout(isBoughtList ? boughtLongTimer : wishLongTimer);
+      }
+      if (wishIsDragging || boughtIsDragging) return;
       if (dx < -10) card.style.transform = `translateX(${Math.max(dx,-80)}px)`;
       else if (dx > 0 && card.classList.contains('swiped')) card.style.transform = 'translateX(0)';
     }, {passive:true});
@@ -1097,6 +1160,8 @@ function setupCardEvents(container) {
     });
 
     card.addEventListener('touchend', e => {
+      clearTimeout(isBoughtList ? boughtLongTimer : wishLongTimer);
+      if (wishIsDragging || boughtIsDragging) return;
       const dx = e.changedTouches[0].clientX - startX;
       if (dx < -45) { card.classList.add('swiped'); card.style.transform = ''; }
       else { card.classList.remove('swiped'); card.style.transform = ''; }
@@ -1120,9 +1185,7 @@ function toggleBought(id) {
 }
 function deleteItem(id) {
   items = items.filter(i=>i.id!==id);
-  save(); render(); document.getElementById('boughtBulkBar').style.display = on ? 'flex' : 'none';
-  updateBoughtBulkBar();
-  renderBought();
+  save(); render(); renderBought();
 }
 
 // ===== Filter drawer =====
@@ -1632,7 +1695,23 @@ function updateBulkBar() {
 }
 
 // ===== Wish list drag sort =====
+let wishSortMode = localStorage.getItem('wishSortMode') || 'custom';
+let boughtSortMode = localStorage.getItem('boughtSortMode') || 'custom';
+
+function sortItems(arr, mode) {
+  const a = [...arr];
+  switch(mode) {
+    case 'newest': return a.sort((x,y) => (y.createdAt||'').localeCompare(x.createdAt||''));
+    case 'oldest': return a.sort((x,y) => (x.createdAt||'').localeCompare(y.createdAt||''));
+    case 'priceHigh': return a.sort((x,y) => (y.price||0) - (x.price||0));
+    case 'priceLow': return a.sort((x,y) => (x.price||0) - (y.price||0));
+    case 'name': return a.sort((x,y) => (x.name||'').localeCompare(y.name||'', 'ja'));
+    default: return a;
+  }
+}
+
 let wishDragIdx = null, wishDragEl = null, wishLongTimer = null, wishIsDragging = false;
+let boughtDragIdx = null, boughtDragEl = null, boughtLongTimer = null, boughtIsDragging = false;
 
 document.addEventListener('touchmove', e => {
   if (!wishIsDragging || !wishDragEl) return;
@@ -1670,6 +1749,87 @@ document.addEventListener('touchend', () => {
     wishDragEl = null; wishDragIdx = null; wishIsDragging = false;
   }
 });
+
+// 買ったもの並び替え
+document.addEventListener('touchmove', e => {
+  if (!boughtIsDragging || !boughtDragEl) return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  const list = document.getElementById('boughtList');
+  const wraps = [...list.querySelectorAll('.card-wrap')];
+  wraps.forEach((el, i) => {
+    if (el === boughtDragEl) return;
+    const r = el.getBoundingClientRect();
+    if (touch.clientY > r.top && touch.clientY < r.bottom && i !== boughtDragIdx) {
+      const bItems = items.filter(it => it.bought);
+      const movedItem = bItems[boughtDragIdx];
+      const gFrom = items.indexOf(movedItem);
+      const targetItem = bItems[i];
+      const gTo = items.indexOf(targetItem);
+      items.splice(gFrom, 1);
+      items.splice(gTo, 0, movedItem);
+      boughtDragIdx = i;
+      save(); renderBought();
+      boughtDragEl = list.querySelectorAll('.card-wrap')[boughtDragIdx];
+      if (boughtDragEl) {
+        boughtDragEl.style.opacity = '0.6';
+        boughtDragEl.style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)';
+      }
+    }
+  });
+}, {passive: false});
+
+document.addEventListener('touchend', () => {
+  clearTimeout(boughtLongTimer);
+  if (boughtDragEl) {
+    boughtDragEl.style.opacity = '';
+    boughtDragEl.style.boxShadow = '';
+    boughtDragEl = null; boughtDragIdx = null; boughtIsDragging = false;
+  }
+});
+
+// ===== ソート機能 =====
+let sortTarget = 'wish';
+function openSortSheet(target) {
+  sortTarget = target;
+  const mode = target === 'wish' ? wishSortMode : boughtSortMode;
+  document.querySelectorAll('#sortSheet .sort-opt').forEach(opt => {
+    opt.querySelector('.sort-check').style.display = opt.dataset.sort === mode ? 'inline' : 'none';
+  });
+  document.getElementById('sortOverlay').style.display = 'block';
+  const sheet = document.getElementById('sortSheet');
+  sheet.style.display = 'block';
+  requestAnimationFrame(() => sheet.classList.add('show'));
+}
+function closeSortSheet() {
+  document.getElementById('sortOverlay').style.display = 'none';
+  const sheet = document.getElementById('sortSheet');
+  sheet.classList.remove('show');
+  setTimeout(() => { sheet.style.display = 'none'; }, 250);
+}
+document.getElementById('sortBtn').addEventListener('click', () => openSortSheet('wish'));
+document.getElementById('sortBtn2').addEventListener('click', () => openSortSheet('bought'));
+document.getElementById('sortOverlay').addEventListener('click', closeSortSheet);
+document.querySelectorAll('#sortSheet .sort-opt').forEach(opt => {
+  opt.addEventListener('click', () => {
+    const mode = opt.dataset.sort;
+    if (sortTarget === 'wish') {
+      wishSortMode = mode;
+      localStorage.setItem('wishSortMode', mode);
+      document.getElementById('sortBtn').classList.toggle('active', mode !== 'custom');
+      render();
+    } else {
+      boughtSortMode = mode;
+      localStorage.setItem('boughtSortMode', mode);
+      document.getElementById('sortBtn2').classList.toggle('active', mode !== 'custom');
+      renderBought();
+    }
+    closeSortSheet();
+  });
+});
+// 初期のアクティブ状態
+document.getElementById('sortBtn').classList.toggle('active', wishSortMode !== 'custom');
+document.getElementById('sortBtn2').classList.toggle('active', boughtSortMode !== 'custom');
 
 document.getElementById('listEditBtn').addEventListener('click', () => {
   setListEditMode(!listEditMode);
@@ -2034,8 +2194,7 @@ setTimeout(() => {
   });
 }, 1000);
 
-// save時にFirestoreにも保存
-const _origSave = save;
+// 保存（localStorage + Firestore同期、デバウンス付き）
 let _saveTimer = null;
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
