@@ -41,20 +41,83 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Firestore保存
+// 同期済み画像を記録（変更分のみ書き込むため）
+const _syncedImages = new Map();
+
+// Firestore保存（メタデータは主ドキュメント、画像は商品ごとの個別ドキュメント）
 async function saveToFirestore(uid, items, categories) {
   try {
-    await setDoc(doc(db, 'users', uid), { items: JSON.stringify(items), categories: JSON.stringify(categories), updatedAt: new Date().toISOString() });
-  } catch(e) { console.error('Firestore save error:', e); }
+    // 1. メタデータ（画像データを除く）を主ドキュメントに保存
+    const meta = items.map(it => {
+      const m = {};
+      for (const k in it) { if (k !== 'image') m[k] = it[k]; }
+      m._img = it.image ? 1 : 0;
+      return m;
+    });
+    const payload = JSON.stringify(meta);
+    const sizeBytes = new Blob([payload]).size;
+    if (sizeBytes > 1000000) {
+      window.dispatchEvent(new CustomEvent('firestore-too-large', { detail: { sizeBytes } }));
+      console.warn('メタデータが大きすぎます（' + Math.round(sizeBytes/1024) + 'KB）。');
+      return;
+    }
+    await setDoc(doc(db, 'users', uid), { items: payload, categories: JSON.stringify(categories), updatedAt: new Date().toISOString() });
+
+    // 2. 画像を個別ドキュメントに保存（前回から変わったものだけ）
+    for (const it of items) {
+      if (!it.image) continue;
+      if (_syncedImages.get(it.id) === it.image) continue;
+      try {
+        await setDoc(doc(db, 'users', uid, 'images', String(it.id)), { data: it.image });
+        _syncedImages.set(it.id, it.image);
+      } catch(imgErr) {
+        // 1枚が大きすぎる等。全体の保存は継続
+        console.warn('画像保存スキップ:', it.id, imgErr.message);
+      }
+    }
+
+    // 3. 削除された商品の画像ドキュメントを削除
+    const currentIds = new Set(items.map(it => String(it.id)));
+    for (const id of [..._syncedImages.keys()]) {
+      if (!currentIds.has(String(id))) {
+        try { await deleteDoc(doc(db, 'users', uid, 'images', String(id))); } catch(e) {}
+        _syncedImages.delete(id);
+      }
+    }
+
+    window.dispatchEvent(new CustomEvent('firestore-saved'));
+  } catch(e) {
+    console.error('Firestore save error:', e);
+    window.dispatchEvent(new CustomEvent('firestore-error', { detail: { message: e.message } }));
+  }
 }
 
-// Firestoreから読み込み
+// Firestoreから読み込み（メタデータ + 画像を結合して返す。戻り値の形は従来通り）
 async function loadFromFirestore(uid) {
   try {
     const snap = await getDoc(doc(db, 'users', uid));
-    if (snap.exists()) return snap.data();
-  } catch(e) { console.error('Firestore load error:', e); }
-  return null;
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    const meta = data.items ? JSON.parse(data.items) : [];
+    // 画像サブコレクションを読み込み
+    const imageMap = new Map();
+    try {
+      const imgSnap = await getDocs(collection(db, 'users', uid, 'images'));
+      imgSnap.forEach(d => {
+        const v = d.data();
+        if (v && v.data) { imageMap.set(d.id, v.data); _syncedImages.set(d.id, v.data); }
+      });
+    } catch(imgErr) { console.warn('画像読み込みスキップ:', imgErr.message); }
+    // メタデータに画像を結合
+    const items = meta.map(m => {
+      const o = {};
+      for (const k in m) { if (k !== '_img') o[k] = m[k]; }
+      const img = imageMap.get(String(m.id));
+      if (img) o.image = img;
+      return o;
+    });
+    return { items: JSON.stringify(items), categories: data.categories };
+  } catch(e) { console.error('Firestore load error:', e); return null; }
 }
 
 // グローバルに公開
@@ -201,7 +264,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   .list { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; padding-bottom: 220px; }
 
   /* Card */
-  .card-wrap { position: relative; overflow: hidden; border-radius: var(--radius); display: block; isolation: isolate; contain: content; }
+  .card-wrap { position: relative; overflow: hidden; border-radius: var(--radius); display: block; isolation: isolate; contain: content; content-visibility: auto; contain-intrinsic-size: auto 90px; }
   .card-wrap, .card-wrap *, .card, .card * {
     -webkit-user-select: none !important;
     -moz-user-select: none !important;
@@ -593,7 +656,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 <body>
 
 <!-- iOS用ハプティック（振動）トリガー -->
-<label id="hapticLabel" aria-hidden="true" style="position:absolute;top:-100px;left:0;opacity:0;pointer-events:none;z-index:-1;">
+<label id="hapticLabel" for="hapticSwitch" aria-hidden="true" style="position:absolute;top:0;left:0;width:1px;height:1px;opacity:0.001;overflow:hidden;z-index:-1;pointer-events:none;">
   <input type="checkbox" id="hapticSwitch" switch style="width:40px;height:24px;" />
 </label>
 
@@ -967,6 +1030,8 @@ const STORAGE_KEY = 'wishlist_v2';
 const CAT_KEY = 'wishlist_cats_v2';
 
 let items = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+let _saveTimer = null;
+let _pendingFirestore = false;
 let categories = JSON.parse(localStorage.getItem(CAT_KEY) || JSON.stringify([
   {name:'📱 ガジェット'},
   {name:'👕 ファッション'},
@@ -985,8 +1050,34 @@ let selectedCategory = null; // null = なし
 let catOpen = false;
 let selectedCategories = new Set();
 
-function saveCats() { localStorage.setItem(CAT_KEY, JSON.stringify(categories)); }
+function saveCats() {
+  localStorage.setItem(CAT_KEY, JSON.stringify(categories));
+  // カテゴリー変更もFirestoreに同期
+  if (currentUser && window._fb) {
+    _pendingFirestore = true;
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => {
+      window._fb.saveToFirestore(currentUser.uid, items, categories);
+      _pendingFirestore = false;
+    }, 800);
+  }
+}
 function getEmoji(name) { return name ? name.slice(0,2) : '📦'; }
+
+// セキュリティ用ヘルパー（外部サイトのOGPデータ等を安全に表示）
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function safeUrl(u) {
+  u = String(u == null ? '' : u).trim();
+  return /^https?:\/\//i.test(u) ? u : '';
+}
+function cssUrl(u) {
+  // background-image: url() 用に危険文字をエスケープ
+  return String(u == null ? '' : u).replace(/['"()\\\s]/g, m => encodeURIComponent(m));
+}
 
 // ===== Tab =====
 document.querySelectorAll('.tab-item').forEach(btn => {
@@ -1067,8 +1158,8 @@ function renderBought() {
 
 function cardHTML(item) {
   const thumb = item.image
-    ? `<div class="card-thumb" style="background-image:url('${item.image}');"></div>`
-    : `<div class="card-thumb">${getEmoji(item.category)}</div>`;
+    ? `<div class="card-thumb" style="background-image:url('${cssUrl(item.image)}');"></div>`
+    : `<div class="card-thumb">${esc(getEmoji(item.category))}</div>`;
   return `
     <div class="card-wrap" data-id="${item.id}">
       <div class="card-delete-bg" data-id="${item.id}">
@@ -1088,9 +1179,9 @@ function cardHTML(item) {
           ${thumb}
           <div class="card-body">
             <div class="card-left">
-              <div class="card-name">${item.name||'（名前なし）'}</div>
-              ${item.memo ? `<div class="card-memo">${item.memo}</div>` : ''}
-              ${item.category ? `<div class="card-category">${item.category}</div>` : ''}
+              <div class="card-name">${esc(item.name||'（名前なし）')}</div>
+              ${item.memo ? `<div class="card-memo">${esc(item.memo)}</div>` : ''}
+              ${item.category ? `<div class="card-category">${esc(item.category)}</div>` : ''}
             </div>
             <div class="card-right-col">
               <div class="card-price">${item.price ? '¥'+item.price.toLocaleString() : ''}</div>
@@ -1211,9 +1302,9 @@ document.getElementById('filterBtn').addEventListener('click', () => {
     ? '<div style="padding:14px;color:#aaa;font-size:13px">カテゴリーなし</div>'
     : cats.map(c => `
       <label style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:14px">
-        <input type="checkbox" data-cat="${c}" ${selectedCategories.has(c)?'checked':''}
+        <input type="checkbox" data-cat="${esc(c)}" ${selectedCategories.has(c)?'checked':''}
           style="width:18px;height:18px;accent-color:#e8380d;cursor:pointer">
-        <span>${c}</span>
+        <span>${esc(c)}</span>
         <span style="margin-left:auto;color:#aaa;font-size:12px">${items.filter(i=>i.category===c&&!i.bought).length}件</span>
       </label>`).join('');
   list.querySelectorAll('input[type=checkbox]').forEach(cb => {
@@ -1288,8 +1379,8 @@ function renderCatOptions() {
   const body = document.getElementById('fsCatBody');
   const opts = [{name:null, emoji:'', label:'なし'}, ...categories.map(c=>({...c,label:c.name}))];
   body.innerHTML = opts.map(c => `
-    <div class="fs-cat-option ${selectedCategory === c.name ? 'selected' : ''}" data-cat="${c.name||''}">
-      <span>${c.label}</span>
+    <div class="fs-cat-option ${selectedCategory === c.name ? 'selected' : ''}" data-cat="${esc(c.name||'')}">
+      <span>${esc(c.label)}</span>
       ${selectedCategory === c.name ? '<span class="check">✓</span>' : ''}
     </div>`).join('');
   body.querySelectorAll('.fs-cat-option').forEach(el => {
@@ -1327,8 +1418,9 @@ document.getElementById('pasteUrlBtn').addEventListener('click', async () => {
   } catch { alert('クリップボードへのアクセスが許可されていません'); }
 });
 document.getElementById('openUrlBtn').addEventListener('click', () => {
-  const url = document.getElementById('inputUrl').value.trim();
-  if (url) window.open(url, '_blank');
+  const url = safeUrl(document.getElementById('inputUrl').value.trim());
+  if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  else alert('http(s) で始まる有効なURLを入力してください');
 });
 
 // サイトから商品情報を自動取得（OGPパース）
@@ -1483,13 +1575,49 @@ async function fetchProductInfo(showAlert) {
 
 document.getElementById('fetchInfoBtn').addEventListener('click', () => fetchProductInfo(true));
 
-// Image
-document.getElementById('inputImage').addEventListener('change', e => {
+// Image（圧縮・リサイズしてからbase64化：Firestoreの1MB制限対策）
+function compressImage(file, maxSize, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        // 長辺をmaxSizeに縮小
+        if (width > height) {
+          if (width > maxSize) { height = Math.round(height * maxSize / width); width = maxSize; }
+        } else {
+          if (height > maxSize) { width = Math.round(width * maxSize / height); height = maxSize; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        // JPEGで圧縮
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = ev.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById('inputImage').addEventListener('change', async e => {
   const file = e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => { selectedImageData = ev.target.result; updateImagePreview(); };
-  reader.readAsDataURL(file);
+  try {
+    // 長辺500px・画質0.7で圧縮（サムネイル用途に十分。1枚あたり25-35KB程度に）
+    selectedImageData = await compressImage(file, 500, 0.7);
+    updateImagePreview();
+  } catch(err) {
+    // 圧縮失敗時は元画像をそのまま使う
+    const reader = new FileReader();
+    reader.onload = ev => { selectedImageData = ev.target.result; updateImagePreview(); };
+    reader.readAsDataURL(file);
+  }
+  e.target.value = '';
 });
 document.getElementById('fsPreviewImg').addEventListener('click', () => {
   document.getElementById('inputImage').click();
@@ -1552,8 +1680,8 @@ function renderCatManage() {
       ${catEditMode ? `<div class="cat-delete-bg" data-idx="${idx}">削除</div>` : ''}
       <div class="cat-manage-item" data-idx="${idx}">
         ${catEditMode
-          ? `<input class="cat-name-input" data-idx="${idx}" value="${c.name}" style="flex:1;border:none;border-bottom:1px solid var(--border);outline:none;font-size:14px;font-family:'Zen Kaku Gothic New',sans-serif;background:transparent;padding:2px 4px;" />`
-          : `<span class="cat-label" style="padding-left:14px;">${c.name}</span>`
+          ? `<input class="cat-name-input" data-idx="${idx}" value="${esc(c.name)}" style="flex:1;border:none;border-bottom:1px solid var(--border);outline:none;font-size:14px;font-family:'Zen Kaku Gothic New',sans-serif;background:transparent;padding:2px 4px;" />`
+          : `<span class="cat-label" style="padding-left:14px;">${esc(c.name)}</span>`
         }
         ${catEditMode ? `<span class="cat-drag-handle" data-idx="${idx}">☰</span>` : ''}
       </div>
@@ -1756,10 +1884,14 @@ let boughtSortMode = localStorage.getItem('boughtSortMode') || 'custom';
 function triggerHaptic() {
   // Android等：Vibration API
   try { if (navigator.vibrate) navigator.vibrate(20); } catch(e) {}
-  // iOS 17.4+：switch要素のトグルでハプティックを発火
+  // iOS 17.4+：switch要素のlabelをクリックしてハプティックを発火
   try {
+    const label = document.getElementById('hapticLabel');
     const sw = document.getElementById('hapticSwitch');
-    if (sw) { sw.checked = !sw.checked; }
+    if (label && sw) {
+      // labelのクリックでcheckboxがトグルされ、システムハプティックが発火
+      label.click();
+    }
   } catch(e) {}
 }
 
@@ -1778,16 +1910,19 @@ function sortItems(arr, mode) {
 let wishDragIdx = null, wishDragEl = null, wishLongTimer = null, wishIsDragging = false;
 let boughtDragIdx = null, boughtDragEl = null, boughtLongTimer = null, boughtIsDragging = false;
 
+let _wishReordered = false;
 document.addEventListener('touchmove', e => {
   if (!wishIsDragging || !wishDragEl) return;
   e.preventDefault();
   const touch = e.touches[0];
   const list = document.getElementById('list');
   const wraps = [...list.querySelectorAll('.card-wrap')];
-  wraps.forEach((el, i) => {
-    if (el === wishDragEl) return;
+  for (let i = 0; i < wraps.length; i++) {
+    const el = wraps[i];
+    if (el === wishDragEl) continue;
     const r = el.getBoundingClientRect();
     if (touch.clientY > r.top && touch.clientY < r.bottom && i !== wishDragIdx) {
+      // データ配列を並び替え
       const wishItems = items.filter(it => !it.bought);
       const movedItem = wishItems[wishDragIdx];
       const gFrom = items.indexOf(movedItem);
@@ -1795,35 +1930,44 @@ document.addEventListener('touchmove', e => {
       const gTo = items.indexOf(targetItem);
       items.splice(gFrom, 1);
       items.splice(gTo, 0, movedItem);
+      // DOM要素を直接移動（全再描画しない＝高速）
+      if (i > wishDragIdx) el.after(wishDragEl); else el.before(wishDragEl);
       wishDragIdx = i;
-      save(); render();
-      wishDragEl = list.querySelectorAll('.card-wrap')[wishDragIdx];
-      if (wishDragEl) {
-        wishDragEl.style.opacity = '0.6';
-        wishDragEl.style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)';
-      }
+      _wishReordered = true;
+      triggerHaptic();
+      break;
     }
-  });
+  }
 }, {passive: false});
 
-document.addEventListener('touchend', () => {
+function endWishDrag() {
   clearTimeout(wishLongTimer);
   if (wishDragEl) {
     wishDragEl.style.opacity = '';
     wishDragEl.style.boxShadow = '';
-    wishDragEl = null; wishDragIdx = null; wishIsDragging = false;
   }
-});
+  wishDragEl = null; wishDragIdx = null; wishIsDragging = false;
+  // ドラッグ終了時にまとめて保存＆再描画（1回だけ）
+  if (_wishReordered) {
+    _wishReordered = false;
+    save();
+    render();
+  }
+}
+document.addEventListener('touchend', endWishDrag);
+document.addEventListener('touchcancel', endWishDrag);
 
 // 買ったもの並び替え
+let _boughtReordered = false;
 document.addEventListener('touchmove', e => {
   if (!boughtIsDragging || !boughtDragEl) return;
   e.preventDefault();
   const touch = e.touches[0];
   const list = document.getElementById('boughtList');
   const wraps = [...list.querySelectorAll('.card-wrap')];
-  wraps.forEach((el, i) => {
-    if (el === boughtDragEl) return;
+  for (let i = 0; i < wraps.length; i++) {
+    const el = wraps[i];
+    if (el === boughtDragEl) continue;
     const r = el.getBoundingClientRect();
     if (touch.clientY > r.top && touch.clientY < r.bottom && i !== boughtDragIdx) {
       const bItems = items.filter(it => it.bought);
@@ -1833,26 +1977,30 @@ document.addEventListener('touchmove', e => {
       const gTo = items.indexOf(targetItem);
       items.splice(gFrom, 1);
       items.splice(gTo, 0, movedItem);
+      if (i > boughtDragIdx) el.after(boughtDragEl); else el.before(boughtDragEl);
       boughtDragIdx = i;
+      _boughtReordered = true;
       triggerHaptic();
-      save(); renderBought();
-      boughtDragEl = list.querySelectorAll('.card-wrap')[boughtDragIdx];
-      if (boughtDragEl) {
-        boughtDragEl.style.opacity = '0.6';
-        boughtDragEl.style.boxShadow = '0 6px 20px rgba(0,0,0,0.2)';
-      }
+      break;
     }
-  });
+  }
 }, {passive: false});
 
-document.addEventListener('touchend', () => {
+function endBoughtDrag() {
   clearTimeout(boughtLongTimer);
   if (boughtDragEl) {
     boughtDragEl.style.opacity = '';
     boughtDragEl.style.boxShadow = '';
-    boughtDragEl = null; boughtDragIdx = null; boughtIsDragging = false;
   }
-});
+  boughtDragEl = null; boughtDragIdx = null; boughtIsDragging = false;
+  if (_boughtReordered) {
+    _boughtReordered = false;
+    save();
+    renderBought();
+  }
+}
+document.addEventListener('touchend', endBoughtDrag);
+document.addEventListener('touchcancel', endBoughtDrag);
 
 // ===== ソート機能 =====
 let sortTarget = 'wish';
@@ -1953,9 +2101,9 @@ document.getElementById('filterBtn2').addEventListener('click', () => {
     ? '<div style="padding:14px;color:#aaa;font-size:13px">カテゴリーなし</div>'
     : cats.map(c => `
       <label style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:14px">
-        <input type="checkbox" data-cat="${c}" ${boughtSelectedCategories.has(c)?'checked':''}
+        <input type="checkbox" data-cat="${esc(c)}" ${boughtSelectedCategories.has(c)?'checked':''}
           style="width:18px;height:18px;accent-color:#e8380d;cursor:pointer">
-        <span>${c}</span>
+        <span>${esc(c)}</span>
         <span style="margin-left:auto;color:#aaa;font-size:12px">${items.filter(i=>i.category===c&&i.bought).length}件</span>
       </label>`).join('');
   list.querySelectorAll('input[type=checkbox]').forEach(cb => {
@@ -2249,9 +2397,13 @@ setTimeout(() => {
       if (data) {
         const remoteItems = data.items ? JSON.parse(data.items) : [];
         const remoteCategories = data.categories ? JSON.parse(data.categories) : [];
-        const remoteIds = new Set(remoteItems.map(i => i.id));
-        const merged = [...remoteItems, ...localItems.filter(i => !remoteIds.has(i.id))];
-        items = merged;
+        const localIds = new Set(localItems.map(i => i.id));
+        const remoteById = new Map(remoteItems.map(i => [i.id, i]));
+        // ローカルにある項目はローカルの並び順を維持しつつ、リモートの最新内容で更新
+        const merged = localItems.map(li => remoteById.get(li.id) || li);
+        // リモートにしかない項目（他端末で追加）を末尾に追加
+        const added = remoteItems.filter(i => !localIds.has(i.id));
+        items = [...merged, ...added];
         if (remoteCategories.length > 0) categories = remoteCategories;
       }
       save(); saveCats();
@@ -2261,17 +2413,52 @@ setTimeout(() => {
 }, 1000);
 
 // 保存（localStorage + Firestore同期、デバウンス付き）
-let _saveTimer = null;
 function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  } catch(e) {
+    // localStorageの上限（約5MB）超過。クラウド保存は継続
+    console.warn('localStorage保存失敗:', e.message);
+    window.dispatchEvent(new CustomEvent('localstorage-full'));
+  }
   if (currentUser && window._fb) {
+    _pendingFirestore = true;
     clearTimeout(_saveTimer);
     _saveTimer = setTimeout(() => {
       window._fb.saveToFirestore(currentUser.uid, items, categories);
+      _pendingFirestore = false;
     }, 800);
   }
 }
+// アプリを閉じる/バックグラウンド時に保留中の保存を即実行
+function flushSave() {
+  if (_pendingFirestore && currentUser && window._fb) {
+    clearTimeout(_saveTimer);
+    try { window._fb.saveToFirestore(currentUser.uid, items, categories); } catch(e) {}
+    _pendingFirestore = false;
+  }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
+window.addEventListener('pagehide', flushSave);
+window.addEventListener('beforeunload', flushSave);
 
+
+// 端末保存（localStorage）が満杯になった場合の通知
+let _localFullWarned = false;
+window.addEventListener('localstorage-full', () => {
+  if (_localFullWarned) return;
+  _localFullWarned = true;
+  alert('この端末の保存容量が上限に近づいています。写真の枚数が非常に多い場合、端末への保存ができないことがあります（ログイン中ならクラウドには保存されます）。');
+});
+
+// クラウド保存の失敗をユーザーに通知
+let _sizeWarned = false;
+window.addEventListener('firestore-too-large', () => {
+  if (_sizeWarned) return;
+  _sizeWarned = true;
+  alert('データ量がクラウド保存の上限（約1MB）に近づいています。写真の枚数が多い場合、新しい変更がクラウドに同期されないことがあります。不要な商品や写真を減らすことをおすすめします。');
+  setTimeout(() => { _sizeWarned = false; }, 60000);
+});
 
 // ===== Share from Safari (iOS Shortcut) =====
 window.addEventListener('DOMContentLoaded', () => {
