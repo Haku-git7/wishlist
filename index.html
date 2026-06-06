@@ -92,32 +92,31 @@ async function saveToFirestore(uid, items, categories) {
   }
 }
 
-// Firestoreから読み込み（メタデータ + 画像を結合して返す。戻り値の形は従来通り）
+// Firestoreから読み込み（メタデータ + 画像を結合して返す）
+// 重要: データが存在しない場合のみ null を返す。通信エラー等は throw する
+// （呼び出し側が「新規ユーザー」と「読み込み失敗」を区別し、失敗時にクラウドを上書きしないため）
 async function loadFromFirestore(uid) {
-  try {
-    const snap = await getDoc(doc(db, 'users', uid));
-    if (!snap.exists()) return null;
-    const data = snap.data();
-    const meta = data.items ? JSON.parse(data.items) : [];
-    // 画像サブコレクションを読み込み
-    const imageMap = new Map();
-    try {
-      const imgSnap = await getDocs(collection(db, 'users', uid, 'images'));
-      imgSnap.forEach(d => {
-        const v = d.data();
-        if (v && v.data) { imageMap.set(d.id, v.data); _syncedImages.set(d.id, v.data); }
-      });
-    } catch(imgErr) { console.warn('画像読み込みスキップ:', imgErr.message); }
-    // メタデータに画像を結合
-    const items = meta.map(m => {
-      const o = {};
-      for (const k in m) { if (k !== '_img') o[k] = m[k]; }
-      const img = imageMap.get(String(m.id));
-      if (img) o.image = img;
-      return o;
-    });
-    return { items: JSON.stringify(items), categories: data.categories };
-  } catch(e) { console.error('Firestore load error:', e); return null; }
+  // 主ドキュメント読み込み（失敗時は例外がそのまま投げられる）
+  const snap = await getDoc(doc(db, 'users', uid));
+  if (!snap.exists()) return null; // 本当にデータが無い（新規ユーザー）
+  const data = snap.data();
+  const meta = data.items ? JSON.parse(data.items) : [];
+  // 画像サブコレクション読み込み（失敗時は throw してデータ不完全な状態での上書きを防ぐ）
+  const imageMap = new Map();
+  const imgSnap = await getDocs(collection(db, 'users', uid, 'images'));
+  imgSnap.forEach(d => {
+    const v = d.data();
+    if (v && v.data) { imageMap.set(d.id, v.data); _syncedImages.set(d.id, v.data); }
+  });
+  // メタデータに画像を結合
+  const items = meta.map(m => {
+    const o = {};
+    for (const k in m) { if (k !== '_img') o[k] = m[k]; }
+    const img = imageMap.get(String(m.id));
+    if (img) o.image = img;
+    return o;
+  });
+  return { items: JSON.stringify(items), categories: data.categories };
 }
 
 // グローバルに公開
@@ -577,7 +576,8 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   /* URL関連アクションボタン（横並び） */
   .fs-actions-row {
     display: flex; gap: 8px;
-    padding: 4px 14px 12px;
+    padding: 10px 14px 12px;
+    border-bottom: 1px solid var(--border);
   }
   .fs-action-btn {
     flex: 1;
@@ -1066,10 +1066,22 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 const STORAGE_KEY = 'wishlist_v2';
 const CAT_KEY = 'wishlist_cats_v2';
 
-let items = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-let _saveTimer = null;
-let _pendingFirestore = false;
-let categories = JSON.parse(localStorage.getItem(CAT_KEY) || JSON.stringify([
+// localStorageを安全に読み込む（破損時はバックアップ→フォールバックの順で復元。絶対にクラッシュさせない）
+function loadLocalData(key, fallback) {
+  // メイン → バックアップの順に試す
+  for (const k of [key, key + '_backup']) {
+    try {
+      const raw = localStorage.getItem(k);
+      if (raw == null) continue;
+      const parsed = JSON.parse(raw);
+      if (parsed != null) return parsed;
+    } catch(e) {
+      console.error('localStorage読み込み失敗(' + k + '):', e.message);
+    }
+  }
+  return fallback;
+}
+const DEFAULT_CATS = [
   {name:'📱 ガジェット'},
   {name:'👕 ファッション'},
   {name:'🍜 食べ物'},
@@ -1078,7 +1090,14 @@ let categories = JSON.parse(localStorage.getItem(CAT_KEY) || JSON.stringify([
   {name:'💊 美容・健康'},
   {name:'🏠 ホーム・インテリア'},
   {name:'📦 その他'},
-]));
+];
+let items = loadLocalData(STORAGE_KEY, []);
+if (!Array.isArray(items)) items = []; // 型安全
+let _saveTimer = null;
+let _pendingFirestore = false;
+let _cloudReady = false; // 初回ロード成功（または新規ユーザー確定）まではFirestore書き込みを保留＝データ消失防止
+let categories = loadLocalData(CAT_KEY, null);
+if (!Array.isArray(categories) || categories.length === 0) categories = DEFAULT_CATS.slice();
 
 let currentTab = 'wish';
 let editingId = null;
@@ -1088,9 +1107,15 @@ let catOpen = false;
 let selectedCategories = new Set();
 
 function saveCats() {
-  localStorage.setItem(CAT_KEY, JSON.stringify(categories));
-  // カテゴリー変更もFirestoreに同期
-  if (currentUser && window._fb) {
+  try {
+    const cjson = JSON.stringify(categories);
+    localStorage.setItem(CAT_KEY, cjson);
+    if (categories.length > 0) {
+      try { localStorage.setItem(CAT_KEY + '_backup', cjson); } catch(e) {}
+    }
+  } catch(e) { console.warn('カテゴリ保存失敗:', e.message); }
+  // カテゴリー変更も初回ロード成功後のみFirestoreに同期
+  if (currentUser && window._fb && _cloudReady) {
     _pendingFirestore = true;
     clearTimeout(_saveTimer);
     _saveTimer = setTimeout(() => {
@@ -1501,9 +1526,23 @@ async function fetchProductInfo(showAlert) {
       clearTimeout(timer);
       controller.abort(); // 残りの未完了リクエストを中断
     }
-    if (!html) throw new Error('all proxies failed');
+    // フォールバック：通常プロキシが全滅（UGG等のボット対策サイト）→ Jinaリーダーで再取得
+    let jinaText = null;
+    if (!html) {
+      try {
+        const jctrl = new AbortController();
+        const jtimer = setTimeout(() => jctrl.abort(), 12000);
+        const jres = await fetch('https://r.jina.ai/' + url, { signal: jctrl.signal, headers: { 'Accept': 'text/plain' } });
+        clearTimeout(jtimer);
+        if (jres.ok) {
+          const txt = await jres.text();
+          if (txt && txt.length > 50) jinaText = txt;
+        }
+      } catch(je) { jinaText = null; }
+    }
+    if (!html && !jinaText) throw new Error('all proxies failed');
 
-    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const doc = new DOMParser().parseFromString(html || '<html></html>', 'text/html');
 
     const getMeta = (props) => {
       for (const p of props) {
@@ -1554,28 +1593,64 @@ async function fetchProductInfo(showAlert) {
     const cleanTitle = (t) => {
       if (!t) return '';
       let s = t.trim().replace(/\s+/g, ' ');
-      const seps = ['｜', '|', ' - ', ' – ', ' — ', '【'];
+      // よくある「ラベル/バッジ」括弧を除去（商品名ではない）
+      const labelWords = '限定|期間限定|数量限定|新品|中古|未使用|送料無料|セール|SALE|予約|新作|公式|正規品|国内正規|即納|在庫あり|あす楽|ポイント|割引|OFF|NEW|最新|人気|おすすめ|特価|お買い得';
+      const labelRe = new RegExp('[【\\[][^】\\]]*(' + labelWords + ')[^】\\]]*[】\\]]', 'gi');
+      s = s.replace(labelRe, ' ').replace(/\s+/g, ' ').trim();
+      // 残った【】内に商品名がある場合（日本のEC頻出）：括弧内を優先抽出
+      const bracket = s.match(/[【\[]([^】\]]+)[】\]]/);
+      if (bracket && bracket[1] && bracket[1].trim().length >= 3) {
+        let inner = bracket[1].trim();
+        const innerParts = inner.split(/[｜|\/]/).map(p => p.trim()).filter(Boolean);
+        if (innerParts.length > 0) inner = innerParts[0];
+        inner = inner.replace(/\s*[0-9]{4,}\s*$/, '').trim();
+        if (inner.length >= 2) return inner;
+      }
+      // 通常：区切り文字の前を採用
+      const seps = ['｜', '|', ' - ', ' – ', ' — ', '【', '/'];
       for (const sep of seps) {
         if (s.includes(sep)) {
           const parts = s.split(sep).map(p => p.trim()).filter(Boolean);
           if (parts.length > 1) { s = parts[0]; break; }
         }
       }
+      // ブランド定型句を除去
+      s = s.replace(/^(UGG®?\s*公式|公式)\s*/i, '').trim();
+      s = s.replace(/\s*(公式(オンライン)?(ストア|サイト|ショップ)?|オンラインストア|通販|ECサイト)\s*$/i, '').trim();
+      s = s.replace(/\s*[0-9]{5,}\s*$/, '').trim();
       return s.trim();
     };
 
     const rawTitle = getMeta(['og:title', 'twitter:title']) || (doc.querySelector('title') ? doc.querySelector('title').textContent : '');
-    const ogTitle = ld.name || cleanTitle(rawTitle);
-    const ogImage = getMeta(['og:image', 'twitter:image', 'twitter:image:src', 'og:image:url']) || ld.image;
+    let ogImage = getMeta(['og:image', 'twitter:image', 'twitter:image:src', 'og:image:url']) || ld.image;
 
-    // --- 価格抽出：JSON-LD → メタタグ → 本文の¥パターン ---
+    // Jinaリーダーのテキスト（マークダウン）から抽出するフォールバック
+    let jinaName = '', jinaPrice = '', jinaImage = '';
+    if (jinaText) {
+      // タイトル：先頭の "Title: ..." 行
+      const tm = jinaText.match(/^Title:\s*(.+)$/m);
+      if (tm) jinaName = cleanTitle(tm[1]);
+      // 価格：¥や円の最初の妥当な金額
+      const pm = jinaText.match(/[¥￥]\s?([0-9][0-9,]{2,})|([0-9][0-9,]{2,})\s?円/);
+      if (pm) jinaPrice = (pm[1] || pm[2] || '').replace(/,/g, '');
+      // 画像：マークダウン画像 ![...](url) の最初のhttp画像
+      const imRe = /!\[[^\]]*\]\((https?:\/\/[^)\s]+\.(?:jpg|jpeg|png|webp)[^)\s]*)\)/gi;
+      const im = imRe.exec(jinaText);
+      if (im) jinaImage = im[1];
+    }
+
+    // 商品名：JSON-LD → og:title整形 → Jina の順
+    const ogTitle = ld.name || cleanTitle(rawTitle) || jinaName;
+    if (!ogImage && jinaImage) ogImage = jinaImage;
+
+    // --- 価格抽出：JSON-LD → メタタグ → 本文の¥パターン → Jina ---
     let price = ld.price || getMeta(['product:price:amount', 'og:price:amount', 'product:price']);
     if (!price) {
-      // 本文から「¥19,800」「19,800円」などを探す
       const bodyText = doc.body ? doc.body.textContent : '';
       const m = bodyText.match(/[¥￥]\s?([0-9][0-9,]{2,})|([0-9][0-9,]{2,})\s?円/);
       if (m) price = (m[1] || m[2] || '').replace(/,/g, '');
     }
+    if (!price && jinaPrice) price = jinaPrice;
 
     if (ogTitle && !document.getElementById('inputName').value.trim()) {
       document.getElementById('inputName').value = ogTitle.trim();
@@ -2244,22 +2319,45 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
       if (resend) await window._fb.sendEmailVerification(cred.user);
       return;
     }
-    const data = await window._fb.loadFromFirestore(cred.user.uid);
-    if (data) {
-      const remoteItems = data.items ? JSON.parse(data.items) : [];
-      const remoteCategories = data.categories ? JSON.parse(data.categories) : [];
-      // ローカルのデータをマージ（IDが重複しないものだけ追加）
-      const remoteIds = new Set(remoteItems.map(i => i.id));
-      const merged = [...remoteItems, ...localItems.filter(i => !remoteIds.has(i.id))];
-      items = merged;
-      if (remoteCategories.length > 0) categories = remoteCategories;
-      save(); saveCats();
-    } else if (localItems.length > 0) {
-      // Firestoreにデータなし → ローカルデータをそのまま保存
-      save(); saveCats();
+    let loadOk = false;
+    let data = null;
+    try {
+      data = await window._fb.loadFromFirestore(cred.user.uid);
+      loadOk = true;
+    } catch(loadErr) {
+      // ロード失敗：クラウドを上書きしない。ローカルデータは保持
+      console.error('ログイン後のクラウド読み込み失敗:', loadErr);
+      loadOk = false;
     }
-    render(); renderBought();
-    hideAuthModal();
+    if (loadOk) {
+      if (data) {
+        const remoteItems = data.items ? JSON.parse(data.items) : [];
+        const remoteCategories = data.categories ? JSON.parse(data.categories) : [];
+        // ローカル順を維持しつつリモート内容で更新、リモートのみの項目を末尾に追加
+        const localIds = new Set(localItems.map(i => i.id));
+        const remoteById = new Map(remoteItems.map(i => [i.id, i]));
+        const merged = localItems.map(li => remoteById.get(li.id) || li);
+        const added = remoteItems.filter(i => !localIds.has(i.id));
+        items = [...merged, ...added];
+        if (remoteCategories.length > 0) {
+          // リモート優先しつつ、ローカルにしかないカテゴリー（未同期の追加分）は失わないよう末尾に残す
+          const remoteNames = new Set(remoteCategories.map(c => c.name));
+          const localOnly = categories.filter(c => !remoteNames.has(c.name));
+          categories = [...remoteCategories, ...localOnly];
+        }
+      }
+      // ロード成功（新規ユーザー含む）→ クラウド書き込み許可して保存
+      _cloudReady = true;
+      save(); saveCats();
+      render(); renderBought();
+      hideAuthModal();
+    } else {
+      // ロード失敗時はログインは成立させるが、クラウド保存は保留（データ保護）
+      _cloudReady = false;
+      render(); renderBought();
+      hideAuthModal();
+      alert('ログインしましたが、クラウドからのデータ読み込みに失敗しました。データ保護のため、変更は次回接続時に同期されます。');
+    }
   } catch(e) {
     showError('authError', 'メールアドレスまたはパスワードが正しくありません');
   }
@@ -2279,6 +2377,7 @@ document.getElementById('registerBtn').addEventListener('click', async () => {
     await window._fb.updateProfile(cred.user, { displayName: name });
     await window._fb.sendEmailVerification(cred.user);
     await window._fb.saveToFirestore(cred.user.uid, items, categories);
+    _cloudReady = true; // 新規アカウント作成＆初回保存成功 → 以降クラウド同期を許可
     render(); renderBought();
     hideAuthModal();
     alert('確認メールを ' + email + ' に送信しました。メール内のリンクをクリックして登録を完了してください。');
@@ -2401,7 +2500,9 @@ document.getElementById('deleteAccountBtn').addEventListener('click', async () =
     const credential = window._fb.EmailAuthProvider.credential(currentUser.email, pw);
     await window._fb.reauthenticateWithCredential(currentUser, credential);
     await window._fb.deleteUser(currentUser);
-    items = []; save();
+    items = []; 
+    _cloudReady = true; // 削除操作は明示的なので保存を許可
+    save();
     hideAuthModal();
     alert('アカウントを削除しました');
   } catch(e) {
@@ -2430,6 +2531,8 @@ document.getElementById('resetPasswordBtn').addEventListener('click', async () =
 // ログアウト
 document.getElementById('logoutBtn').addEventListener('click', async () => {
   if (!window._fb) return;
+  flushSave(); // ログアウト前に保留中の変更を確実に保存
+  _cloudReady = false; // ログアウト後は次回ロード完了までクラウド書き込みを保留
   await window._fb.signOut(window._fb.auth);
   hideAuthModal();
 });
@@ -2439,8 +2542,9 @@ setTimeout(() => {
   if (!window._fb) return;
   window._fb.onAuthStateChanged(window._fb.auth, async (user) => {
     updateAccountUI(user);
-    if (user) {
-      const localItems = [...items];
+    if (!user) return;
+    const localItems = [...items];
+    try {
       const data = await window._fb.loadFromFirestore(user.uid);
       if (data) {
         const remoteItems = data.items ? JSON.parse(data.items) : [];
@@ -2452,24 +2556,44 @@ setTimeout(() => {
         // リモートにしかない項目（他端末で追加）を末尾に追加
         const added = remoteItems.filter(i => !localIds.has(i.id));
         items = [...merged, ...added];
-        if (remoteCategories.length > 0) categories = remoteCategories;
+        if (remoteCategories.length > 0) {
+          // リモート優先しつつ、ローカルにしかないカテゴリー（未同期の追加分）は失わないよう末尾に残す
+          const remoteNames = new Set(remoteCategories.map(c => c.name));
+          const localOnly = categories.filter(c => !remoteNames.has(c.name));
+          categories = [...remoteCategories, ...localOnly];
+        }
       }
+      // ここまで到達＝ロード成功（data=nullの新規ユーザー含む）。以降クラウド書き込みを許可
+      _cloudReady = true;
       save(); saveCats();
       render(); renderBought();
+    } catch(e) {
+      // ロード失敗：クラウドを絶対に上書きしない（_cloudReadyはfalseのまま）
+      // ローカルデータは保持して表示し、データ消失を防ぐ
+      console.error('クラウド読み込み失敗。データ保護のためクラウド保存を保留します:', e);
+      _cloudReady = false;
+      render(); renderBought();
+      window.dispatchEvent(new CustomEvent('cloud-load-failed'));
     }
   });
 }, 1000);
 
 // 保存（localStorage + Firestore同期、デバウンス付き）
 function save() {
+  // localStorageは常に保存（端末内のデータは絶対に失わない）
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    const json = JSON.stringify(items);
+    localStorage.setItem(STORAGE_KEY, json);
+    // 非空のときだけバックアップを更新（誤って空データで良いバックアップを上書きしない）
+    if (items.length > 0) {
+      try { localStorage.setItem(STORAGE_KEY + '_backup', json); } catch(e) {}
+    }
   } catch(e) {
-    // localStorageの上限（約5MB）超過。クラウド保存は継続
     console.warn('localStorage保存失敗:', e.message);
     window.dispatchEvent(new CustomEvent('localstorage-full'));
   }
-  if (currentUser && window._fb) {
+  // Firestoreへは「初回ロード成功後」のみ書き込む（失敗時の空上書き＝データ消失を防ぐ）
+  if (currentUser && window._fb && _cloudReady) {
     _pendingFirestore = true;
     clearTimeout(_saveTimer);
     _saveTimer = setTimeout(() => {
@@ -2480,7 +2604,7 @@ function save() {
 }
 // アプリを閉じる/バックグラウンド時に保留中の保存を即実行
 function flushSave() {
-  if (_pendingFirestore && currentUser && window._fb) {
+  if (_pendingFirestore && currentUser && window._fb && _cloudReady) {
     clearTimeout(_saveTimer);
     try { window._fb.saveToFirestore(currentUser.uid, items, categories); } catch(e) {}
     _pendingFirestore = false;
@@ -2490,6 +2614,16 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 window.addEventListener('pagehide', flushSave);
 window.addEventListener('beforeunload', flushSave);
 
+
+// クラウド読み込み失敗の通知（データ保護のため保存を保留中であることを伝える）
+let _cloudFailWarned = false;
+window.addEventListener('cloud-load-failed', () => {
+  if (_cloudFailWarned) return;
+  _cloudFailWarned = true;
+  setTimeout(() => {
+    alert('クラウドからのデータ読み込みに失敗しました。\nデータ保護のため、この端末での変更はクラウドに保存されません。\n通信環境を確認してアプリを再起動してください。');
+  }, 800);
+});
 
 // 端末保存（localStorage）が満杯になった場合の通知
 let _localFullWarned = false;
