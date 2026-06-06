@@ -472,7 +472,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     -webkit-overflow-scrolling: touch;
     animation: slideInUp 0.3s ease;
     will-change: transform;
-    padding-bottom: 100px;
+    padding-bottom: 140px;
   }
   .fullscreen-modal.open { display: block; }
   @keyframes slideInUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -497,19 +497,22 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   }
   .fs-save-fixed {
     position: fixed;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
-    right: 24px;
-    width: 70px;
-    height: 70px;
-    background: var(--accent); color: #fff; border: none;
-    border-radius: 50%;
-    font-size: 17px; font-weight: 700; cursor: pointer;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+    left: 16px; right: 16px;
+    width: auto; height: 54px;
+    background: linear-gradient(135deg, #ff5e3a 0%, #e8380d 100%);
+    color: #fff; border: none;
+    border-radius: 15px;
+    font-size: 16px; font-weight: 700; cursor: pointer;
     font-family: 'Zen Kaku Gothic New', sans-serif;
-    box-shadow: 0 4px 16px rgba(232,56,13,0.4);
+    box-shadow: 0 6px 20px rgba(232,56,13,0.38);
     z-index: 700;
     display: none;
     align-items: center; justify-content: center;
+    letter-spacing: 0.05em;
+    transition: transform 0.12s ease, box-shadow 0.15s ease;
   }
+  .fs-save-fixed:active { transform: scale(0.98); box-shadow: 0 3px 12px rgba(232,56,13,0.32); }
 
 
   /* Image area */
@@ -571,11 +574,43 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     white-space: nowrap; flex-shrink: 0;
     font-weight: 500;
   }
-  .fs-open-url-btn {
-    font-size: 13px; color: #007aff; background: none; border: none;
-    cursor: pointer; font-family: 'Zen Kaku Gothic New', sans-serif;
-    padding: 2px 0; text-decoration: underline;
+  /* URL関連アクションボタン（横並び） */
+  .fs-actions-row {
+    display: flex; gap: 8px;
+    padding: 4px 14px 12px;
   }
+  .fs-action-btn {
+    flex: 1;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 44px; border-radius: 12px;
+    font-size: 13.5px; font-weight: 600; cursor: pointer;
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    border: none; -webkit-tap-highlight-color: transparent;
+    transition: transform 0.12s ease, box-shadow 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+    white-space: nowrap;
+  }
+  .fs-action-btn:active { transform: scale(0.96); }
+  .fs-action-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+  /* 情報を取得：アクセントの塗り */
+  .fs-action-primary {
+    background: linear-gradient(135deg, #ff5e3a 0%, #e8380d 100%);
+    color: #fff;
+    box-shadow: 0 3px 12px rgba(232,56,13,0.30);
+  }
+  .fs-action-primary:active { box-shadow: 0 2px 8px rgba(232,56,13,0.26); }
+  .fs-action-primary:disabled { opacity: 0.6; transform: none; cursor: default; }
+  /* サイトを開く：ニュートラル */
+  .fs-action-secondary {
+    background: #f4f5f7; color: #3a3a3c;
+  }
+  .fs-action-secondary:active { background: #e8eaed; }
+  /* 取得中スピナー */
+  .fs-spinner {
+    width: 15px; height: 15px; border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: #fff; border-radius: 50%;
+    animation: fsspin 0.6s linear infinite; flex-shrink: 0;
+  }
+  @keyframes fsspin { to { transform: rotate(360deg); } }
 
   /* Category accordion */
   .fs-cat-header {
@@ -870,13 +905,15 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
       <input class="fs-row-input" id="inputUrl" placeholder="URL" type="url" />
       <button class="fs-paste-btn" id="pasteUrlBtn">貼付</button>
     </div>
-    <div class="fs-row" id="fetchInfoRow" style="display:none">
-      <span class="fs-row-icon"></span>
-      <button class="fs-open-url-btn" id="fetchInfoBtn" style="background:#fff3f0;color:var(--accent);">🪄 サイトから情報を取得</button>
-    </div>
-    <div class="fs-row" id="openUrlRow" style="display:none">
-      <span class="fs-row-icon"></span>
-      <button class="fs-open-url-btn" id="openUrlBtn">商品サイトを開く</button>
+    <div class="fs-actions-row" id="urlActionsRow" style="display:none">
+      <button class="fs-action-btn fs-action-primary" id="fetchInfoBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4M13 3l2.5 6.5L22 12l-6.5 2.5L13 21l-2.5-6.5L4 12l6.5-2.5z"/></svg>
+        <span id="fetchInfoLabel">情報を取得</span>
+      </button>
+      <button class="fs-action-btn fs-action-secondary" id="openUrlBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        <span>サイトを開く</span>
+      </button>
     </div>
     <div class="fs-row">
       <span class="fs-row-icon">✏️</span>
@@ -1354,10 +1391,8 @@ function openFsModal(item = null) {
 
 function updateUrlRow() {
   const url = document.getElementById('inputUrl').value.trim();
-  const row = document.getElementById('openUrlRow');
-  row.style.display = url ? 'flex' : 'none';
-  const fetchRow = document.getElementById('fetchInfoRow');
-  if (fetchRow) fetchRow.style.display = url ? 'flex' : 'none';
+  const row = document.getElementById('urlActionsRow');
+  if (row) row.style.display = url ? 'flex' : 'none';
 }
 
 function updateCatDisplay() {
@@ -1424,34 +1459,47 @@ document.getElementById('openUrlBtn').addEventListener('click', () => {
 });
 
 // サイトから商品情報を自動取得（OGPパース）
+let _fetchInFlight = false;
 async function fetchProductInfo(showAlert) {
   const url = document.getElementById('inputUrl').value.trim();
   if (!url || !/^https?:\/\//.test(url)) return;
+  if (_fetchInFlight) return; // 二重起動防止
+  _fetchInFlight = true;
   const btn = document.getElementById('fetchInfoBtn');
-  const originalText = btn.textContent;
-  btn.textContent = '取得中...';
-  btn.disabled = true;
+  const origHTML = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="fs-spinner"></span><span>取得中</span>'; }
   try {
-    // 複数のCORSプロキシを順に試す
-    let html = null;
+    // 複数のCORSプロキシを「並列」で投げ、最速で有効HTMLを返したものを採用
     const proxies = [
-      u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
       u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
+      u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+      u => 'https://thingproxy.freeboard.io/fetch/' + u,
       u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u),
     ];
-    for (const makeUrl of proxies) {
-      try {
-        const res = await fetch(makeUrl(url));
-        if (!res.ok) continue;
-        const text = await res.text();
-        // allorigins/get形式(JSON)の場合のフォールバック
-        if (text.trim().startsWith('{') && text.includes('"contents"')) {
-          try { html = JSON.parse(text).contents; } catch { html = text; }
-        } else {
-          html = text;
-        }
-        if (html && html.length > 100) break;
-      } catch(err) { continue; }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 9000);
+    const fetchOne = async (makeUrl) => {
+      const res = await fetch(makeUrl(url), { signal: controller.signal, redirect: 'follow' });
+      if (!res.ok) throw new Error('bad status');
+      const text = await res.text();
+      let h;
+      if (text.trim().startsWith('{') && text.includes('"contents"')) {
+        try { h = JSON.parse(text).contents; } catch { h = text; }
+      } else { h = text; }
+      // 有効なHTMLか軽く検証（メタ/JSON-LD/titleのいずれかを含む）
+      if (!h || h.length < 100) throw new Error('too short');
+      if (!/<meta|application\/ld\+json|<title/i.test(h)) throw new Error('not html');
+      return h;
+    };
+    let html = null;
+    try {
+      // 最速で「有効なHTML」を返したプロキシを採用（全部の完了を待たない）
+      html = await Promise.any(proxies.map(p => fetchOne(p)));
+    } catch(e) {
+      html = null;
+    } finally {
+      clearTimeout(timer);
+      controller.abort(); // 残りの未完了リクエストを中断
     }
     if (!html) throw new Error('all proxies failed');
 
@@ -1568,8 +1616,8 @@ async function fetchProductInfo(showAlert) {
   } catch(e) {
     if (showAlert) alert('情報の取得に失敗しました。サイトによっては取得できない場合があります。');
   } finally {
-    btn.textContent = originalText;
-    btn.disabled = false;
+    if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
+    _fetchInFlight = false;
   }
 }
 
