@@ -291,11 +291,9 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     transition: transform 0.2s ease; touch-action: pan-y;
     position: relative; z-index: 1;
     box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    animation: fadeIn 0.25s ease;
   }
   .card.swiped { transform: translateX(-90px); }
   .card:active { opacity: 0.85; }
-  @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
   .card-inner { display: flex; align-items: stretch; height: 90px; width: 100%; }
   .card-thumb {
     width: 90px;
@@ -336,8 +334,6 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     overflow: hidden;
     max-height: 2.6em;
   }
-  .card-name.long { font-size: 12.5px; max-height: 2.6em; }
-  .card-name.vlong { font-size: 11.5px; max-height: 2.6em; }
   .card-category { font-size: 11px; color: var(--text2); margin-top: 3px; }
   .card-price { font-size: 14px; color: var(--accent); font-weight: 700; white-space: nowrap; }
   .card-memo { font-size: 11px; color: var(--text2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -877,7 +873,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 
 <!-- Total bar above FAB -->
 <div class="total-bar">
-  <div class="total-label">合計金額</div>
+  <div class="total-label" id="totalLabel">合計金額</div>
   <div class="total-amount" id="totalAmount">¥0</div>
 </div>
 
@@ -1151,8 +1147,8 @@ document.querySelectorAll('.tab-item').forEach(btn => {
     document.getElementById('screen-' + currentTab).classList.add('active');
     const isWish = currentTab === 'wish';
     document.getElementById('fabBtn').style.display = isWish ? 'flex' : 'none';
-    document.getElementById('totalAmount').parentElement.style.display = isWish ? 'flex' : 'none';
     const isBought = currentTab === 'bought';
+    document.getElementById('totalAmount').parentElement.style.display = (isWish || isBought) ? 'flex' : 'none';
     const isOther = currentTab === 'other';
     document.getElementById('header-wish').style.display = isWish ? 'flex' : 'none';
     document.getElementById('header-bought').style.display = isBought ? 'flex' : 'none';
@@ -1168,8 +1164,8 @@ document.querySelectorAll('.tab-item').forEach(btn => {
 // ===== Render wish =====
 function render() {
   const list = document.getElementById('list');
-  let filtered = items.filter(i => !i.bought);
-  if (selectedCategories.size > 0) filtered = filtered.filter(i => selectedCategories.has(i.category));
+  const notBought = items.filter(i => !i.bought);
+  let filtered = selectedCategories.size > 0 ? notBought.filter(i => selectedCategories.has(i.category)) : notBought;
   filtered = sortItems(filtered, wishSortMode);
   list.innerHTML = filtered.length === 0
     ? `<div class="empty"><div class="empty-icon"><svg width="56" height="56" viewBox="0 0 24 24" fill="#ddd" stroke="#ccc" stroke-width="1.5"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div><div>まだ何もありません</div></div>`
@@ -1181,14 +1177,14 @@ function render() {
         wrap.classList.add('edit-mode');
         if (selectedIds.has(wrap.dataset.id)) wrap.classList.add('selected');
       });
-      list.querySelectorAll('.card-wrap').forEach(wrap => {
-        if (selectedIds.has(wrap.dataset.id)) wrap.classList.add('selected');
-      });
     }
   }
-  const total = items.filter(i=>!i.bought).reduce((s,i)=>s+(i.price||0),0);
-  document.getElementById('totalAmount').textContent = '¥' + total.toLocaleString();
-  document.getElementById('statsText').textContent = `${items.filter(i=>!i.bought).length}件`;
+  if (currentTab !== 'bought') {
+    const total = notBought.reduce((s,i)=>s+(i.price||0),0);
+    document.getElementById('totalLabel').textContent = '合計金額';
+    document.getElementById('totalAmount').textContent = '¥' + total.toLocaleString();
+  }
+  document.getElementById('statsText').textContent = `${notBought.length}件`;
   document.getElementById('filterBtn').classList.toggle('active', selectedCategories.size > 0);
 }
 
@@ -1207,14 +1203,16 @@ function renderBought() {
         wrap.classList.add('edit-mode');
         if (boughtSelectedIds.has(wrap.dataset.id)) wrap.classList.add('selected');
       });
-      list.querySelectorAll('.card-wrap').forEach(wrap => {
-        if (boughtSelectedIds.has(wrap.dataset.id)) wrap.classList.add('selected');
-      });
     }
   }
   document.getElementById('filterBtn2').classList.toggle('active', boughtSelectedCategories.size > 0);
+  const boughtItems = items.filter(i=>i.bought);
   if (currentTab === 'bought') {
-    document.getElementById('statsText2').textContent = items.filter(i=>i.bought).length + '件';
+    document.getElementById('statsText2').textContent = boughtItems.length + '件';
+    // 購入合計をバーに表示
+    const boughtTotal = boughtItems.reduce((s,i)=>s+(i.price||0),0);
+    document.getElementById('totalLabel').textContent = '購入合計';
+    document.getElementById('totalAmount').textContent = '¥' + boughtTotal.toLocaleString();
   }
 }
 
@@ -2045,12 +2043,14 @@ document.addEventListener('touchmove', e => {
     if (el === wishDragEl) continue;
     const r = el.getBoundingClientRect();
     if (touch.clientY > r.top && touch.clientY < r.bottom && i !== wishDragIdx) {
-      // データ配列を並び替え
-      const wishItems = items.filter(it => !it.bought);
+      // データ配列を並び替え（フィルター適用中も表示順とインデックスを一致させる）
+      const wishItems = sortItems(items.filter(it => !it.bought).filter(it => selectedCategories.size===0 || selectedCategories.has(it.category)), 'custom');
       const movedItem = wishItems[wishDragIdx];
-      const gFrom = items.indexOf(movedItem);
       const targetItem = wishItems[i];
+      if (!movedItem || !targetItem) break; // インデックス不整合時は安全に中断（配列破損防止）
+      const gFrom = items.indexOf(movedItem);
       const gTo = items.indexOf(targetItem);
+      if (gFrom < 0 || gTo < 0) break;
       items.splice(gFrom, 1);
       items.splice(gTo, 0, movedItem);
       // DOM要素を直接移動（全再描画しない＝高速）
@@ -2093,11 +2093,13 @@ document.addEventListener('touchmove', e => {
     if (el === boughtDragEl) continue;
     const r = el.getBoundingClientRect();
     if (touch.clientY > r.top && touch.clientY < r.bottom && i !== boughtDragIdx) {
-      const bItems = items.filter(it => it.bought);
+      const bItems = sortItems(items.filter(it => it.bought).filter(it => boughtSelectedCategories.size===0 || boughtSelectedCategories.has(it.category)), 'custom');
       const movedItem = bItems[boughtDragIdx];
-      const gFrom = items.indexOf(movedItem);
       const targetItem = bItems[i];
+      if (!movedItem || !targetItem) break;
+      const gFrom = items.indexOf(movedItem);
       const gTo = items.indexOf(targetItem);
+      if (gFrom < 0 || gTo < 0) break;
       items.splice(gFrom, 1);
       items.splice(gTo, 0, movedItem);
       if (i > boughtDragIdx) el.after(boughtDragEl); else el.before(boughtDragEl);
