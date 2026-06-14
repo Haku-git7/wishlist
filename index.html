@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<script>
+  // テーマを描画前に適用（フラッシュ防止）。'system' は属性なし＝端末設定に追従
+  try { var _t = localStorage.getItem('wishlist_theme'); if (_t === 'dark' || _t === 'light') document.documentElement.setAttribute('data-theme', _t); } catch(e) {}
+</script>
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
 <script>
@@ -125,23 +129,80 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 </script>
 <style>
   :root {
-    --bg: #f2f2f7;
+    --bg: #ffffff;
     --surface: #ffffff;
     --surface2: #f0f0f0;
     --border: #e0e0e0;
+    --border-2: #cccccc;
     --accent: #e8380d;
-    --text: #111;
-    --text2: #666;
-    --text3: #aaa;
+    --accent-tint: var(--accent-tint);
+    --text: #111111;
+    --text2: #666666;
+    --text3: #aaaaaa;
     --danger: #e8380d;
     --success: #00a651;
+    --header-bg: rgba(255,255,255,0.96);
     --radius: 12px;
     --tab-h: 52px;
   }
+  /* ダークテーマ: 端末設定に追従（data-theme未指定 or "system"）。明示 light は除外して常にライト */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #000000;
+      --surface: #1c1c1e;
+      --surface2: #2c2c2e;
+      --border: #38383a;
+      --border-2: #48484a;
+      --accent-tint: #2a1613;
+      --text: #f5f5f7;
+      --text2: #aeaeb2;
+      --text3: #8e8e93;
+      --header-bg: rgba(28,28,30,0.85);
+    }
+  }
+  /* 明示的にダークを選択した場合は端末設定に関わらずダーク */
+  :root[data-theme="dark"] {
+    --bg: #000000;
+    --surface: #1c1c1e;
+    --surface2: #2c2c2e;
+    --border: #38383a;
+    --border-2: #48484a;
+    --accent-tint: #2a1613;
+    --text: #f5f5f7;
+    --text2: #aeaeb2;
+    --text3: #8e8e93;
+    --header-bg: rgba(28,28,30,0.85);
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  /* フォーム要素はテーマ色を継承（ダーク時の黒文字化を防止）。色指定済みの要素はそちらが優先 */
+  input, textarea, select, button { color: var(--text); }
+  input::placeholder, textarea::placeholder { color: var(--text3); }
+
+  /* 検索バー */
+  #searchBar {
+    position: sticky; top: 48px; z-index: 99;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 8px 12px; align-items: center; gap: 8px;
+  }
+  #searchBar svg { flex-shrink: 0; color: var(--text3); }
+  #searchInput {
+    flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+    font-family: 'Zen Kaku Gothic New', sans-serif; font-size: 15px; color: var(--text);
+  }
+  #searchInput::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+  #searchClear { background: none; border: none; font-size: 17px; color: var(--text3); cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
+
+  /* テーマ切替（セグメント） */
+  .theme-seg { display: flex; gap: 4px; background: var(--surface2); border-radius: 8px; padding: 3px; }
+  .theme-opt {
+    border: none; background: none; cursor: pointer;
+    font-size: 12px; padding: 5px 9px; border-radius: 6px; color: var(--text2);
+    font-family: 'Zen Kaku Gothic New', sans-serif; white-space: nowrap;
+  }
+  .theme-opt.active { background: var(--surface); color: var(--text); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
   body {
     font-family: 'Zen Kaku Gothic New', sans-serif;
-    background: #ffffff;
+    background: var(--bg);
     color: var(--text);
     min-height: 100vh;
     overflow-x: hidden;
@@ -151,7 +212,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   /* Header */
   .header {
     position: sticky; top: 0; z-index: 100;
-    background: rgba(255,255,255,0.96);
+    background: var(--header-bg);
     backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--border);
     padding: 12px 14px;
@@ -169,7 +230,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     right: 0;
     bottom: 0;
     height: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 12px);
-    background: #ffffff;
+    background: var(--surface);
     border-top: 1px solid var(--border);
     display: flex;
     z-index: 200;
@@ -244,7 +305,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 12px);
     left: 0;
     right: 0;
-    background: #ffffff;
+    background: var(--surface);
     border-top: 1px solid var(--border);
     padding: 0 20px;
     display: flex;
@@ -287,7 +348,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   .card.swiped ~ .card-delete-bg,
   .card-wrap:has(.card.swiped) .card-delete-bg { display: flex; }
   .card {
-    background: #fff; border: 1px solid var(--border);
+    background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); overflow: hidden;
     transition: transform 0.2s ease; touch-action: pan-y;
     position: relative; z-index: 1;
@@ -329,7 +390,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     justify-content: space-between; padding-left: 8px; flex-shrink: 0;
   }
   .card-name {
-    font-size: 14px; font-weight: 500; line-height: 1.3; color: #111;
+    font-size: 14px; font-weight: 500; line-height: 1.3; color: var(--text);
     word-break: break-word; overflow-wrap: anywhere;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     overflow: hidden;
@@ -376,9 +437,9 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   }
   .card-check-overlay .check-circle svg { display: none; }
   .card-wrap.edit-mode .card-check-overlay { display: flex; }
-  .card-wrap.selected .card { border-color: #e8380d; background: #fff8f7; }
+  .card-wrap.selected .card { border-color: var(--accent); background: var(--accent-tint); }
   .card-wrap.selected .card-check-overlay { background: rgba(232,56,13,0.25); }
-  .card-wrap.selected .check-circle { background: #e8380d; border-color: #e8380d; }
+  .card-wrap.selected .check-circle { background: var(--accent); border-color: var(--accent); }
   .card-wrap.selected .check-circle svg { display: block; }
 
   .cat-header-row {
@@ -403,7 +464,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     border: none;
     font-size: 22px;
     cursor: pointer;
-    color: #666;
+    color: var(--text2);
     padding: 0;
   }
   .cat-edit-btn {
@@ -432,7 +493,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     display: flex !important;
   }
 
-  .sort-opt:active { background: #f5f5f5; }
+  .sort-opt:active { background: var(--surface2); }
   #sortSheet { transform: translateY(100%); }
   #sortSheet.show { transform: translateY(0); }
 
@@ -444,7 +505,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   /* Filter drawer */
   .drawer {
     display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 260px;
-    background: #fff; z-index: 400;
+    background: var(--surface); z-index: 400;
     box-shadow: -4px 0 20px rgba(0,0,0,0.15);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -457,13 +518,13 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   .overlay.open { display: block; }
   .drawer-header {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: #fff;
+    padding: 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface);
   }
 
   /* ===== ADD/EDIT MODAL (full screen) ===== */
   .fullscreen-modal {
     display: none; position: fixed; inset: 0;
-    background: #ffffff; z-index: 600;
+    background: var(--surface); z-index: 600;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     animation: slideInUp 0.3s ease;
@@ -513,13 +574,13 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 
   /* Image area */
   .fs-image-area {
-    background: #e0e0e0;
+    background: var(--border);
     margin: 12px;
     border-radius: var(--radius);
     height: 180px;
     display: flex; align-items: center; justify-content: center;
     position: relative; overflow: hidden; cursor: pointer;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-2);
   }
   .fs-image-area input[type=file] {
     position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
@@ -563,9 +624,9 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     resize: none; line-height: 1.4;
   }
   .fs-paste-btn {
-    background: #e8e8e8; border: none; cursor: pointer;
+    background: var(--surface2); border: none; cursor: pointer;
     padding: 6px 12px; border-radius: 6px;
-    font-size: 13px; color: #333;
+    font-size: 13px; color: var(--text);
     font-family: 'Zen Kaku Gothic New', sans-serif;
     white-space: nowrap; flex-shrink: 0;
     font-weight: 500;
@@ -598,9 +659,9 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   .fs-action-primary:disabled { opacity: 0.6; transform: none; cursor: default; }
   /* サイトを開く：ニュートラル */
   .fs-action-secondary {
-    background: #f4f5f7; color: #3a3a3c;
+    background: var(--surface2); color: var(--text);
   }
-  .fs-action-secondary:active { background: #e8eaed; }
+  .fs-action-secondary:active { background: var(--surface2); }
   /* 取得中スピナー */
   .fs-spinner {
     width: 15px; height: 15px; border: 2px solid rgba(255,255,255,0.4);
@@ -628,7 +689,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   .fs-cat-option .check { margin-left: auto; color: var(--accent); }
 
   /* Settings / その他 */
-  .settings-section { background: #fff; border-radius: var(--radius); margin: 8px 14px; overflow: hidden; border: 1px solid var(--border); box-sizing: border-box; }
+  .settings-section { background: var(--surface); border-radius: var(--radius); margin: 8px 14px; overflow: hidden; border: 1px solid var(--border); box-sizing: border-box; }
   .settings-title { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; padding: 10px 14px 6px; }
   .settings-row {
     display: flex; align-items: center; padding: 13px 14px;
@@ -642,7 +703,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   .cat-manage-item {
     display: flex; align-items: center; width: 100%; padding: 11px 14px;
     border-top: 1px solid var(--border); font-size: 14px;
-    background: #fff; cursor: default;
+    background: var(--surface); cursor: default;
   }
   .cat-manage-item:first-of-type { border-top: none; }
   .cat-name-input, .cat-label { flex: 1; }
@@ -666,7 +727,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border);
   }
   .add-cat-input {
-    flex: 1; min-width: 0; background: #fafafa; border: 1px solid var(--border);
+    flex: 1; min-width: 0; background: var(--surface2); border: 1px solid var(--border);
     border-radius: 8px; padding: 8px 10px; font-family: 'Zen Kaku Gothic New', sans-serif;
     font-size: 14px; outline: none;
   }
@@ -697,6 +758,11 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   <div class="header-title">ねこ<span>棚</span></div>
   <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
     <div class="header-stats" id="statsText" style="white-space:nowrap;">0件</div>
+    <button class="filter-icon-btn" id="searchBtn" title="検索">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    </button>
     <button class="filter-icon-btn" id="sortBtn" title="並び替え">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="15" y2="12"/><line x1="4" y1="17" x2="10" y2="17"/>
@@ -707,7 +773,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
         <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
       </svg>
     </button>
-    <button id="listEditBtn" style="background:none;border:none;cursor:pointer;font-size:13px;color:#666;font-family:'Zen Kaku Gothic New',sans-serif;padding:2px 4px;white-space:nowrap;">編集</button>
+    <button id="listEditBtn" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--text2);font-family:'Zen Kaku Gothic New',sans-serif;padding:2px 4px;white-space:nowrap;">編集</button>
   </div>
 </div>
 
@@ -716,6 +782,11 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
   <div class="header-title">ねこ<span>棚</span></div>
   <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
     <div class="header-stats" id="statsText2" style="white-space:nowrap;">0件</div>
+    <button class="filter-icon-btn" id="searchBtn2" title="検索">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    </button>
     <button class="filter-icon-btn" id="sortBtn2" title="並び替え">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="15" y2="12"/><line x1="4" y1="17" x2="10" y2="17"/>
@@ -726,7 +797,7 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
         <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
       </svg>
     </button>
-    <button id="boughtEditBtn" style="background:none;border:none;cursor:pointer;font-size:13px;color:#666;font-family:'Zen Kaku Gothic New',sans-serif;padding:2px 4px;white-space:nowrap;">編集</button>
+    <button id="boughtEditBtn" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--text2);font-family:'Zen Kaku Gothic New',sans-serif;padding:2px 4px;white-space:nowrap;">編集</button>
   </div>
 </div>
 
@@ -743,9 +814,15 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
     <button style="background:none;border:none;font-size:13px;padding:2px 4px;white-space:nowrap;visibility:hidden;pointer-events:none;">編集</button>
   </div>
 </div>
-<div id="bulkBar" style="display:none;position:sticky;top:48px;z-index:99;background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 14px;align-items:center;justify-content:space-between;">
-  <span id="bulkCount" style="font-size:13px;color:#666;">0件選択</span>
-  <button id="bulkDeleteBtn" style="background:#e8380d;color:#fff;border:none;border-radius:8px;padding:6px 16px;font-size:13px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">削除</button>
+<!-- 検索バー（欲しいもの／買ったもの 共通） -->
+<div id="searchBar" style="display:none;">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  <input id="searchInput" type="search" enterkeyhint="search" placeholder="名前・メモ・カテゴリーで検索">
+  <button id="searchClear" title="クリア">✕</button>
+</div>
+<div id="bulkBar" style="display:none;position:sticky;top:48px;z-index:99;background:var(--surface);border-bottom:1px solid var(--border);padding:8px 14px;align-items:center;justify-content:space-between;">
+  <span id="bulkCount" style="font-size:13px;color:var(--text2);">0件選択</span>
+  <button id="bulkDeleteBtn" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:6px 16px;font-size:13px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">削除</button>
 </div>
 
 <!-- Filter Drawer -->
@@ -764,9 +841,9 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 </div>
 
 <!-- Bought bulk bar -->
-<div id="boughtBulkBar" style="display:none;position:sticky;top:48px;z-index:99;background:#fff;border-bottom:1px solid #e0e0e0;padding:8px 14px;align-items:center;justify-content:space-between;">
-  <span id="boughtBulkCount" style="font-size:13px;color:#666;">0件選択</span>
-  <button id="boughtBulkDeleteBtn" style="background:#e8380d;color:#fff;border:none;border-radius:8px;padding:6px 16px;font-size:13px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">削除</button>
+<div id="boughtBulkBar" style="display:none;position:sticky;top:48px;z-index:99;background:var(--surface);border-bottom:1px solid var(--border);padding:8px 14px;align-items:center;justify-content:space-between;">
+  <span id="boughtBulkCount" style="font-size:13px;color:var(--text2);">0件選択</span>
+  <button id="boughtBulkDeleteBtn" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:6px 16px;font-size:13px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">削除</button>
 </div>
 <!-- 買ったもの画面 -->
 <div class="screen" id="screen-bought">
@@ -810,6 +887,18 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
         <span class="settings-row-arrow">›</span>
       </div>
     </div>
+    <div class="settings-section">
+      <div class="settings-title">表示</div>
+      <div class="settings-row" style="cursor:default;">
+        <span class="settings-row-icon">🌓</span>
+        <span class="settings-row-label">テーマ</span>
+        <div class="theme-seg">
+          <button class="theme-opt" data-theme-val="system">システム</button>
+          <button class="theme-opt" data-theme-val="light">ライト</button>
+          <button class="theme-opt" data-theme-val="dark">ダーク</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -837,14 +926,14 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 
 <!-- ソートメニュー -->
 <div id="sortOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:450;"></div>
-<div id="sortSheet" style="display:none;position:fixed;left:0;right:0;bottom:0;background:#fff;border-radius:16px 16px 0 0;z-index:451;padding:8px 0 calc(env(safe-area-inset-bottom,0px) + 16px);box-shadow:0 -4px 20px rgba(0,0,0,0.15);transition:transform 0.25s ease;">
-  <div style="text-align:center;padding:12px;font-weight:700;font-size:15px;border-bottom:1px solid #f0f0f0;">並び替え</div>
-  <div class="sort-opt" data-sort="custom" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f5f5f5;"><span>カスタム（長押しで並び替え）</span><span class="sort-check" style="color:#e8380d;display:none;">✓</span></div>
-  <div class="sort-opt" data-sort="newest" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f5f5f5;"><span>追加が新しい順</span><span class="sort-check" style="color:#e8380d;display:none;">✓</span></div>
-  <div class="sort-opt" data-sort="oldest" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f5f5f5;"><span>追加が古い順</span><span class="sort-check" style="color:#e8380d;display:none;">✓</span></div>
-  <div class="sort-opt" data-sort="priceHigh" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f5f5f5;"><span>金額が高い順</span><span class="sort-check" style="color:#e8380d;display:none;">✓</span></div>
-  <div class="sort-opt" data-sort="priceLow" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f5f5f5;"><span>金額が安い順</span><span class="sort-check" style="color:#e8380d;display:none;">✓</span></div>
-  <div class="sort-opt" data-sort="name" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;"><span>名前順</span><span class="sort-check" style="color:#e8380d;display:none;">✓</span></div>
+<div id="sortSheet" style="display:none;position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-radius:16px 16px 0 0;z-index:451;padding:8px 0 calc(env(safe-area-inset-bottom,0px) + 16px);box-shadow:0 -4px 20px rgba(0,0,0,0.15);transition:transform 0.25s ease;">
+  <div style="text-align:center;padding:12px;font-weight:700;font-size:15px;border-bottom:1px solid var(--surface2);">並び替え</div>
+  <div class="sort-opt" data-sort="custom" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--surface2);"><span>カスタム（長押しで並び替え）</span><span class="sort-check" style="color:var(--accent);display:none;">✓</span></div>
+  <div class="sort-opt" data-sort="newest" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--surface2);"><span>追加が新しい順</span><span class="sort-check" style="color:var(--accent);display:none;">✓</span></div>
+  <div class="sort-opt" data-sort="oldest" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--surface2);"><span>追加が古い順</span><span class="sort-check" style="color:var(--accent);display:none;">✓</span></div>
+  <div class="sort-opt" data-sort="priceHigh" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--surface2);"><span>金額が高い順</span><span class="sort-check" style="color:var(--accent);display:none;">✓</span></div>
+  <div class="sort-opt" data-sort="priceLow" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--surface2);"><span>金額が安い順</span><span class="sort-check" style="color:var(--accent);display:none;">✓</span></div>
+  <div class="sort-opt" data-sort="name" style="padding:16px 20px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;"><span>名前順</span><span class="sort-check" style="color:var(--accent);display:none;">✓</span></div>
 </div>
 
 <!-- Tab bar -->
@@ -944,26 +1033,26 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
 
 <!-- Auth Modal -->
 <div id="authModal">
-  <div style="background:#fff;border-radius:16px;padding:24px 20px;width:90%;max-width:360px;max-height:90vh;overflow-y:auto;">
+  <div style="background:var(--surface);border-radius:16px;padding:24px 20px;width:90%;max-width:360px;max-height:90vh;overflow-y:auto;">
     <div id="authViewLogin">
       <div style="font-size:18px;font-weight:700;margin-bottom:20px;text-align:center;">ログイン</div>
-      <input id="authEmail" type="email" placeholder="メールアドレス" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
-      <input id="authPassword" type="password" placeholder="パスワード" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;margin-bottom:16px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
-      <div id="authError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
-      <button id="loginBtn" style="width:100%;padding:13px;background:#e8380d;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">ログイン</button>
-      <button id="toRegisterBtn" style="width:100%;padding:13px;background:#f5f5f5;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">新規登録</button>
+      <input id="authEmail" type="email" placeholder="メールアドレス" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
+      <input id="authPassword" type="password" placeholder="パスワード" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:15px;margin-bottom:16px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
+      <div id="authError" style="color:var(--accent);font-size:13px;margin-bottom:10px;display:none;"></div>
+      <button id="loginBtn" style="width:100%;padding:13px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">ログイン</button>
+      <button id="toRegisterBtn" style="width:100%;padding:13px;background:var(--surface2);color:var(--text);border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">新規登録</button>
       <button id="resetPasswordBtn" style="width:100%;padding:10px;background:none;color:#007aff;border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:4px;">パスワードをお忘れの方</button>
-      <button id="authCloseBtn" style="width:100%;padding:10px;background:none;color:#aaa;border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">キャンセル</button>
+      <button id="authCloseBtn" style="width:100%;padding:10px;background:none;color:var(--text3);border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">キャンセル</button>
     </div>
     <div id="authViewRegister" style="display:none;">
       <div style="font-size:18px;font-weight:700;margin-bottom:20px;text-align:center;">新規登録</div>
-      <input id="regName" type="text" placeholder="ユーザー名" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
-      <input id="regEmail" type="email" placeholder="メールアドレス" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
-      <input id="regPassword" type="password" placeholder="パスワード（8文字以上）" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;margin-bottom:16px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
-      <div id="regError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
-      <button id="registerBtn" style="width:100%;padding:13px;background:#e8380d;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">登録する</button>
-      <button id="toLoginBtn" style="width:100%;padding:13px;background:#f5f5f5;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">ログインに戻る</button>
-      <button id="regCloseBtn" style="width:100%;padding:10px;background:none;color:#aaa;border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">キャンセル</button>
+      <input id="regName" type="text" placeholder="ユーザー名" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
+      <input id="regEmail" type="email" placeholder="メールアドレス" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:15px;margin-bottom:10px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
+      <input id="regPassword" type="password" placeholder="パスワード（8文字以上）" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:15px;margin-bottom:16px;outline:none;font-family:'Zen Kaku Gothic New',sans-serif;">
+      <div id="regError" style="color:var(--accent);font-size:13px;margin-bottom:10px;display:none;"></div>
+      <button id="registerBtn" style="width:100%;padding:13px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">登録する</button>
+      <button id="toLoginBtn" style="width:100%;padding:13px;background:var(--surface2);color:var(--text);border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">ログインに戻る</button>
+      <button id="regCloseBtn" style="width:100%;padding:10px;background:none;color:var(--text3);border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">キャンセル</button>
     </div>
     <!-- アカウントトップ -->
     <div id="authViewAccount" style="display:none;">
@@ -971,86 +1060,86 @@ window._fb = { auth, db, saveToFirestore, loadFromFirestore, createUserWithEmail
       <div style="text-align:center;margin-bottom:24px;">
         <div style="font-size:40px;margin-bottom:8px;">👤</div>
         <div id="acctName" style="font-size:16px;font-weight:700;"></div>
-        <div id="acctEmail" style="font-size:13px;color:#666;margin-top:4px;"></div>
+        <div id="acctEmail" style="font-size:13px;color:var(--text2);margin-top:4px;"></div>
       </div>
-      <div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:16px;">
-        <div id="toUsernameBtn" style="display:flex;align-items:center;padding:14px;cursor:pointer;border-bottom:1px solid #e0e0e0;">
+      <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:16px;">
+        <div id="toUsernameBtn" style="display:flex;align-items:center;padding:14px;cursor:pointer;border-bottom:1px solid var(--border);">
           <span style="flex:1;font-size:15px;">ユーザー名</span>
-          <span id="acctNamePreview" style="font-size:13px;color:#aaa;margin-right:8px;"></span>
-          <span style="color:#aaa;">›</span>
+          <span id="acctNamePreview" style="font-size:13px;color:var(--text3);margin-right:8px;"></span>
+          <span style="color:var(--text3);">›</span>
         </div>
-        <div id="toEmailBtn" style="display:flex;align-items:center;padding:14px;cursor:pointer;border-bottom:1px solid #e0e0e0;">
+        <div id="toEmailBtn" style="display:flex;align-items:center;padding:14px;cursor:pointer;border-bottom:1px solid var(--border);">
           <span style="flex:1;font-size:15px;">メールアドレス</span>
-          <span id="acctEmailPreview" style="font-size:13px;color:#aaa;margin-right:8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-          <span style="color:#aaa;">›</span>
+          <span id="acctEmailPreview" style="font-size:13px;color:var(--text3);margin-right:8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+          <span style="color:var(--text3);">›</span>
         </div>
         <div id="toPasswordBtn" style="display:flex;align-items:center;padding:14px;cursor:pointer;">
           <span style="flex:1;font-size:15px;">パスワード</span>
-          <span style="color:#aaa;">›</span>
+          <span style="color:var(--text3);">›</span>
         </div>
       </div>
-      <button id="logoutBtn" style="width:100%;padding:13px;background:#f5f5f5;color:#333;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">ログアウト</button>
-      <button id="deleteAccountBtn" style="width:100%;padding:13px;background:none;color:#e8380d;border:1px solid #e8380d;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">アカウントを削除する</button>
-      <button id="acctCloseBtn" style="width:100%;padding:10px;background:none;color:#aaa;border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">閉じる</button>
+      <button id="logoutBtn" style="width:100%;padding:13px;background:var(--surface2);color:var(--text);border:none;border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">ログアウト</button>
+      <button id="deleteAccountBtn" style="width:100%;padding:13px;background:none;color:var(--accent);border:1px solid var(--accent);border-radius:8px;font-size:15px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;margin-bottom:10px;">アカウントを削除する</button>
+      <button id="acctCloseBtn" style="width:100%;padding:10px;background:none;color:var(--text3);border:none;font-size:14px;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">閉じる</button>
     </div>
 
     <!-- ユーザー名変更 -->
     <div id="authViewUsername" style="display:none;">
       <div style="display:flex;align-items:center;margin-bottom:20px;">
-        <button id="backFromUsernameBtn" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;margin-right:8px;padding:0;">‹</button>
+        <button id="backFromUsernameBtn" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text2);margin-right:8px;padding:0;">‹</button>
         <div style="font-size:18px;font-weight:700;">ユーザー名</div>
       </div>
-      <div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:12px;">
+      <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px;">
         <div style="padding:14px;">
-          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">新しいユーザー名</div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:4px;">新しいユーザー名</div>
           <input id="newUsername" type="text" placeholder="ユーザー名" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
         </div>
       </div>
-      <div id="usernameError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
-      <div id="usernameSuccess" style="color:#00a651;font-size:13px;margin-bottom:10px;display:none;"></div>
-      <button id="changeUsernameBtn" style="width:100%;padding:13px;background:#e8380d;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">変更する</button>
+      <div id="usernameError" style="color:var(--accent);font-size:13px;margin-bottom:10px;display:none;"></div>
+      <div id="usernameSuccess" style="color:var(--success);font-size:13px;margin-bottom:10px;display:none;"></div>
+      <button id="changeUsernameBtn" style="width:100%;padding:13px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">変更する</button>
     </div>
 
     <!-- メールアドレス変更 -->
     <div id="authViewEmail" style="display:none;">
       <div style="display:flex;align-items:center;margin-bottom:20px;">
-        <button id="backFromEmailBtn" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;margin-right:8px;padding:0;">‹</button>
+        <button id="backFromEmailBtn" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text2);margin-right:8px;padding:0;">‹</button>
         <div style="font-size:18px;font-weight:700;">メールアドレス</div>
       </div>
-      <div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:12px;">
-        <div style="padding:14px;border-bottom:1px solid #e0e0e0;">
-          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">新しいメールアドレス</div>
+      <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px;">
+        <div style="padding:14px;border-bottom:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--text3);margin-bottom:4px;">新しいメールアドレス</div>
           <input id="newEmail" type="email" placeholder="新しいメールアドレス" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
         </div>
         <div style="padding:14px;">
-          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">現在のパスワード（確認用）</div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:4px;">現在のパスワード（確認用）</div>
           <input id="emailChangePassword" type="password" placeholder="パスワード" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
         </div>
       </div>
-      <div id="emailError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
-      <div id="emailSuccess" style="color:#00a651;font-size:13px;margin-bottom:10px;display:none;"></div>
-      <button id="changeEmailBtn" style="width:100%;padding:13px;background:#e8380d;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">変更する</button>
+      <div id="emailError" style="color:var(--accent);font-size:13px;margin-bottom:10px;display:none;"></div>
+      <div id="emailSuccess" style="color:var(--success);font-size:13px;margin-bottom:10px;display:none;"></div>
+      <button id="changeEmailBtn" style="width:100%;padding:13px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">変更する</button>
     </div>
 
     <!-- パスワード変更 -->
     <div id="authViewPassword" style="display:none;">
       <div style="display:flex;align-items:center;margin-bottom:20px;">
-        <button id="backFromPasswordBtn" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;margin-right:8px;padding:0;">‹</button>
+        <button id="backFromPasswordBtn" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text2);margin-right:8px;padding:0;">‹</button>
         <div style="font-size:18px;font-weight:700;">パスワード</div>
       </div>
-      <div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;margin-bottom:12px;">
-        <div style="padding:14px;border-bottom:1px solid #e0e0e0;">
-          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">現在のパスワード</div>
+      <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px;">
+        <div style="padding:14px;border-bottom:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--text3);margin-bottom:4px;">現在のパスワード</div>
           <input id="currentPassword" type="password" placeholder="現在のパスワード" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
         </div>
         <div style="padding:14px;">
-          <div style="font-size:12px;color:#aaa;margin-bottom:4px;">新しいパスワード（8文字以上）</div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:4px;">新しいパスワード（8文字以上）</div>
           <input id="newPassword" type="password" placeholder="8文字以上" style="width:100%;border:none;outline:none;font-size:15px;font-family:'Zen Kaku Gothic New',sans-serif;">
         </div>
       </div>
-      <div id="pwError" style="color:#e8380d;font-size:13px;margin-bottom:10px;display:none;"></div>
-      <div id="pwSuccess" style="color:#00a651;font-size:13px;margin-bottom:10px;display:none;"></div>
-      <button id="changePasswordBtn" style="width:100%;padding:13px;background:#e8380d;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">変更する</button>
+      <div id="pwError" style="color:var(--accent);font-size:13px;margin-bottom:10px;display:none;"></div>
+      <div id="pwSuccess" style="color:var(--success);font-size:13px;margin-bottom:10px;display:none;"></div>
+      <button id="changePasswordBtn" style="width:100%;padding:13px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Kaku Gothic New',sans-serif;">変更する</button>
     </div>
 
     <div id="acctError" style="display:none;"></div>
@@ -1154,6 +1243,8 @@ document.querySelectorAll('.tab-item').forEach(btn => {
     document.getElementById('header-wish').style.display = isWish ? 'flex' : 'none';
     document.getElementById('header-bought').style.display = isBought ? 'flex' : 'none';
     document.getElementById('header-other').style.display = isOther ? 'flex' : 'none';
+    // 検索バーは欲しいもの／買ったものでのみ表示（その他では隠す）
+    document.getElementById('searchBar').style.display = (searchOpen && !isOther) ? 'flex' : 'none';
     if (!isWish && listEditMode) setListEditMode(false);
     if (!isBought && boughtEditMode) setBoughtEditMode(false);
     if (currentTab === 'bought') renderBought();
@@ -1167,9 +1258,10 @@ function render() {
   const list = document.getElementById('list');
   const notBought = items.filter(i => !i.bought);
   let filtered = selectedCategories.size > 0 ? notBought.filter(i => selectedCategories.has(i.category)) : notBought;
+  if (searchQuery) filtered = filtered.filter(itemMatchesSearch);
   filtered = sortItems(filtered, wishSortMode);
   list.innerHTML = filtered.length === 0
-    ? `<div class="empty"><div class="empty-icon"><svg width="56" height="56" viewBox="0 0 24 24" fill="#ddd" stroke="#ccc" stroke-width="1.5"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div><div>まだ何もありません</div></div>`
+    ? `<div class="empty"><div class="empty-icon"><svg width="56" height="56" viewBox="0 0 24 24" fill="#ddd" stroke="#ccc" stroke-width="1.5"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div><div>${searchQuery ? '一致する商品がありません' : 'まだ何もありません'}</div></div>`
     : filtered.map(item => cardHTML(item)).join('');
   if (filtered.length > 0) {
     if (typeof listEditMode !== 'undefined' && listEditMode) {
@@ -1192,9 +1284,10 @@ function renderBought() {
   const list = document.getElementById('boughtList');
   let filtered = items.filter(i => i.bought);
   if (boughtSelectedCategories.size > 0) filtered = filtered.filter(i => boughtSelectedCategories.has(i.category));
+  if (searchQuery) filtered = filtered.filter(itemMatchesSearch);
   filtered = sortItems(filtered, boughtSortMode);
   list.innerHTML = filtered.length === 0
-    ? `<div class="empty"><div class="empty-icon"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div>まだ何もありません</div></div>`
+    ? `<div class="empty"><div class="empty-icon"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div>${searchQuery ? '一致する商品がありません' : 'まだ何もありません'}</div></div>`
     : filtered.map(item => cardHTML(item)).join('');
   if (filtered.length > 0) {
     if (boughtEditMode) {
@@ -1356,13 +1449,13 @@ document.getElementById('filterBtn').addEventListener('click', () => {
   const cats = [...new Set(items.filter(i=>!i.bought).map(i=>i.category).filter(Boolean))];
   const list = document.getElementById('filterCatList');
   list.innerHTML = cats.length === 0
-    ? '<div style="padding:14px;color:#aaa;font-size:13px">カテゴリーなし</div>'
+    ? '<div style="padding:14px;color:var(--text3);font-size:13px">カテゴリーなし</div>'
     : cats.map(c => `
-      <label style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:14px">
+      <label style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--surface2);cursor:pointer;font-size:14px">
         <input type="checkbox" data-cat="${esc(c)}" ${selectedCategories.has(c)?'checked':''}
-          style="width:18px;height:18px;accent-color:#e8380d;cursor:pointer">
+          style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
         <span>${esc(c)}</span>
-        <span style="margin-left:auto;color:#aaa;font-size:12px">${items.filter(i=>i.category===c&&!i.bought).length}件</span>
+        <span style="margin-left:auto;color:var(--text3);font-size:12px">${items.filter(i=>i.category===c&&!i.bought).length}件</span>
       </label>`).join('');
   list.querySelectorAll('input[type=checkbox]').forEach(cb => {
     cb.addEventListener('change', () => {
@@ -1980,11 +2073,12 @@ let boughtSelectedIds = new Set();
 let boughtSelectedCategories = new Set();
 
 function setListEditMode(on) {
+  if (on) hideSearchBar(); // 編集バーと検索バーの同時表示を避ける
   listEditMode = on;
   selectedIds.clear();
   const btn = document.getElementById('listEditBtn');
   btn.textContent = on ? '完了' : '編集';
-  btn.style.color = on ? '#e8380d' : '#666';
+  btn.style.color = on ? 'var(--accent)' : 'var(--text2)';
   const bar = document.getElementById('bulkBar');
   bar.style.display = on ? 'flex' : 'none';
   updateBulkBar();
@@ -2186,11 +2280,12 @@ document.getElementById('header-other').style.display = 'none';
 // ===== Bought edit mode =====
 
 function setBoughtEditMode(on) {
+  if (on) hideSearchBar(); // 編集バーと検索バーの同時表示を避ける
   boughtEditMode = on;
   boughtSelectedIds.clear();
   const btn = document.getElementById('boughtEditBtn');
   btn.textContent = on ? '完了' : '編集';
-  btn.style.color = on ? '#e8380d' : '#666';
+  btn.style.color = on ? 'var(--accent)' : 'var(--text2)';
   const bar = document.getElementById('boughtBulkBar');
   bar.style.display = on ? 'flex' : 'none';
   updateBoughtBulkBar();
@@ -2220,13 +2315,13 @@ document.getElementById('filterBtn2').addEventListener('click', () => {
   const cats = [...new Set(items.filter(i=>i.bought).map(i=>i.category).filter(Boolean))];
   const list = document.getElementById('filterCatList');
   list.innerHTML = cats.length === 0
-    ? '<div style="padding:14px;color:#aaa;font-size:13px">カテゴリーなし</div>'
+    ? '<div style="padding:14px;color:var(--text3);font-size:13px">カテゴリーなし</div>'
     : cats.map(c => `
-      <label style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:14px">
+      <label style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--surface2);cursor:pointer;font-size:14px">
         <input type="checkbox" data-cat="${esc(c)}" ${boughtSelectedCategories.has(c)?'checked':''}
-          style="width:18px;height:18px;accent-color:#e8380d;cursor:pointer">
+          style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
         <span>${esc(c)}</span>
-        <span style="margin-left:auto;color:#aaa;font-size:12px">${items.filter(i=>i.category===c&&i.bought).length}件</span>
+        <span style="margin-left:auto;color:var(--text3);font-size:12px">${items.filter(i=>i.category===c&&i.bought).length}件</span>
       </label>`).join('');
   list.querySelectorAll('input[type=checkbox]').forEach(cb => {
     cb.addEventListener('change', () => {
@@ -2658,6 +2753,86 @@ window.addEventListener('DOMContentLoaded', () => {
     }, 500);
   }
 });
+
+// ===== 検索 =====
+let searchQuery = '';
+let searchOpen = false;
+function itemMatchesSearch(i) {
+  const q = searchQuery;
+  return (i.name||'').toLowerCase().includes(q)
+      || (i.memo||'').toLowerCase().includes(q)
+      || (i.category||'').toLowerCase().includes(q);
+}
+// 現在のタブのリストだけ再描画
+function renderActive() {
+  if (currentTab === 'bought') renderBought();
+  else if (currentTab !== 'other') render();
+}
+// 検索バーを閉じる（状態リセットのみ。再描画はしない）
+function hideSearchBar() {
+  searchOpen = false;
+  searchQuery = '';
+  const inp = document.getElementById('searchInput');
+  if (inp) inp.value = '';
+  const bar = document.getElementById('searchBar');
+  if (bar) bar.style.display = 'none';
+}
+function openSearch() {
+  if (listEditMode) setListEditMode(false);   // 編集モードとは排他
+  if (boughtEditMode) setBoughtEditMode(false);
+  searchOpen = true;
+  document.getElementById('searchBar').style.display = 'flex';
+  const inp = document.getElementById('searchInput');
+  inp.value = searchQuery;
+  inp.focus();
+}
+function closeSearch() { hideSearchBar(); renderActive(); }
+function toggleSearch() { if (searchOpen) closeSearch(); else openSearch(); }
+document.getElementById('searchBtn').addEventListener('click', toggleSearch);
+document.getElementById('searchBtn2').addEventListener('click', toggleSearch);
+document.getElementById('searchInput').addEventListener('input', e => {
+  searchQuery = e.target.value.trim().toLowerCase();
+  renderActive();
+});
+document.getElementById('searchClear').addEventListener('click', () => {
+  if (searchQuery) {
+    searchQuery = '';
+    const inp = document.getElementById('searchInput');
+    inp.value = ''; inp.focus();
+    renderActive();
+  } else {
+    closeSearch();
+  }
+});
+
+// ===== テーマ（システム／ライト／ダーク） =====
+const THEME_KEY = 'wishlist_theme';
+function getSavedTheme() { try { return localStorage.getItem(THEME_KEY) || 'system'; } catch(e) { return 'system'; } }
+function applyTheme(mode) {
+  const root = document.documentElement;
+  if (mode === 'dark' || mode === 'light') root.setAttribute('data-theme', mode);
+  else root.removeAttribute('data-theme'); // system = 端末設定に追従
+  const isDark = mode === 'dark' || (mode !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const tc = document.querySelector('meta[name="theme-color"]');
+  if (tc) tc.setAttribute('content', isDark ? '#000000' : '#ffffff');
+  document.querySelectorAll('.theme-opt').forEach(b => b.classList.toggle('active', b.dataset.themeVal === mode));
+}
+function setTheme(mode) {
+  try { localStorage.setItem(THEME_KEY, mode); } catch(e) {}
+  applyTheme(mode);
+}
+document.querySelectorAll('.theme-opt').forEach(b => {
+  b.addEventListener('click', () => setTheme(b.dataset.themeVal));
+});
+// 端末のダーク設定変更に追従（「システム」選択時のみ）
+if (window.matchMedia) {
+  try {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (getSavedTheme() === 'system') applyTheme('system');
+    });
+  } catch(e) {}
+}
+applyTheme(getSavedTheme());
 
 // Init
 // カードのタッチ/クリック操作はリストコンテナへ一度だけ委譲登録（再描画ごとの貼り直しを廃止）
